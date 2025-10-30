@@ -1,0 +1,154 @@
+name: 'Build and Publish .NET Package'
+description: 'Builds, signs, and publishes a .NET NuGet package to Artifactory and NuGet.org'
+
+inputs:
+  project_path:
+    description: 'The path to the .csproj file to build and pack.'
+    required: true
+  push_to_nuget_org:
+    description: 'Push to nuget.org'
+    required: false
+    default: 'false'
+  artifactory_username:
+    description: 'Username for Artifactory'
+    required: false
+  artifactory_password:
+    description: 'Password for Artifactory'
+    required: false
+  code_sign_cert_base64:
+    description: 'Base64 encoded code signing certificate'
+    required: false
+  code_sign_pfx_pass:
+    description: 'Password for the code signing certificate'
+    required: false
+  nuget_api_key:
+    description: 'API key for NuGet.org'
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: .NET SDK info
+        run: dotnet --info
+        shell: bash
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Compute prerelease version suffix
+        id: suffix
+        shell: bash
+        run: |
+          BR="${GITHUB_REF_NAME:-unknown}"
+          if [ "$BR" = "main" ] || [ "$BR" = "master" ]; then
+            echo "VERSION_SUFFIX=" >> $GITHUB_ENV
+            echo "No suffix for $BR"
+          else
+            norm=$(echo "$BR" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]' | cut -c1-15)
+            echo "VERSION_SUFFIX=alpha.${norm}.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+            echo "Using suffix: alpha.${norm}.${GITHUB_RUN_NUMBER}"
+          fi
+
+      - name: Add Artifactory NuGet source (optional)
+        shell: bash
+        env:
+          NUGET_ALL_REPO: https://artifactory.fiks.ks.no/artifactory/api/nuget/nuget-all
+          ARTIFACTORY_USERNAME: ${{ inputs.artifactory_username }}
+          ARTIFACTORY_PASSWORD: ${{ inputs.artifactory_password }}
+        run: |
+          if [ -n "${ARTIFACTORY_USERNAME:-}" ] && [ -n "${ARTIFACTORY_PASSWORD:-}" ]; then
+            dotnet nuget add source "$NUGET_ALL_REPO" -n nuget-all -u "$ARTIFACTORY_USERNAME" -p "$ARTIFACTORY_PASSWORD" --store-password-in-clear-text || true
+          else
+            echo "Artifactory credentials not set; skipping source add"
+          fi
+
+      - name: Restore
+        shell: bash
+        run: |
+          dotnet restore ${{ inputs.project_path }} --nologo --verbosity minimal
+
+      - name: Build Release
+        shell: bash
+        run: |
+          EXTRA=""
+          if [ -n "${VERSION_SUFFIX}" ]; then EXTRA="--version-suffix ${VERSION_SUFFIX}"; fi
+          dotnet build ${{ inputs.project_path }} -c Release --no-restore --nologo --verbosity normal $EXTRA
+
+      - name: Pack library
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          EXTRA=""
+          if [ -n "${VERSION_SUFFIX}" ]; then EXTRA="--version-suffix ${VERSION_SUFFIX}"; fi
+          dotnet pack ${{ inputs.project_path }} -c Release --no-build -o artifacts $EXTRA
+
+      - name: Sign NuGet package(s) (optional)
+        shell: bash
+        env:
+          CODE_SIGN_CERT_BASE64: ${{ inputs.code_sign_cert_base64 }}
+          CODE_SIGN_PFX_PASS: ${{ inputs.code_sign_pfx_pass }}
+        run: |
+          if [ -n "${CODE_SIGN_CERT_BASE64:-}" ] && [ -n "${CODE_SIGN_PFX_PASS:-}" ]; then
+            echo "$CODE_SIGN_CERT_BASE64" | base64 -d > ks-code-sign.pfx
+            dotnet nuget sign artifacts/*.nupkg \
+              --timestamper http://timestamp.digicert.com \
+              --certificate-path ks-code-sign.pfx \
+              --certificate-password "$CODE_SIGN_PFX_PASS" -v detailed
+          else
+            echo "Signing secrets not set; skipping signing"
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: |
+            artifacts/*.nupkg
+            artifacts/*.snupkg
+
+      - name: Push to Artifactory (optional)
+        shell: bash
+        env:
+          ARTIFACTORY_USERNAME: ${{ inputs.artifactory_username }}
+          ARTIFACTORY_PASSWORD: ${{ inputs.artifactory_password }}
+        run: |
+          if [ -n "${ARTIFACTORY_USERNAME:-}" ] && [ -n "${ARTIFACTORY_PASSWORD:-}" ]; then
+            dotnet nuget push artifacts/*.nupkg --source nuget-all --skip-duplicate
+          else
+            echo "Artifactory credentials not set; skipping push"
+          fi
+
+      - name: Push to NuGet.org
+        if: (github.ref_name == 'main' || inputs.push_to_nuget_org == 'true') && !startsWith(github.ref_name, 'dependabot')
+        env:
+          NUGET_API_KEY: ${{ inputs.nuget_api_key }}
+        shell: bash
+        run: |
+          if [ -n "${NUGET_API_KEY:-}" ]; then
+            dotnet nuget push artifacts/*.nupkg --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY" --skip-duplicate
+          else
+            echo "NuGet.org API key not set; skipping push"
+          fi
+
+      - name: Remove Artifactory NuGet source (optional)
+        shell: bash
+        env:
+          ARTIFACTORY_USERNAME: ${{ inputs.artifactory_username }}
+        run: |
+          if [ -n "${ARTIFACTORY_USERNAME:-}" ]; then
+            dotnet nuget remove source nuget-all || true
+          else
+            echo "Artifactory credentials not set; nothing to remove"
+          fi

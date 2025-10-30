@@ -1,0 +1,24 @@
+name: Call .NET Build and Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      push_to_nuget_org:
+        description: 'Push to nuget.org'
+        required: false
+        type: boolean
+
+jobs:
+  build-and-publish:
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Build and Publish Package
+        uses: ks-no/github-actions/public-dotnet@main
+        with:
+          project_path: 'Someapp/Someapp.csproj'
+          push_to_nuget_org: ${{ github.event.inputs.push_to_nuget_org }}
+          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+          code_sign_cert_base64: ${{ secrets.CODE_SIGN_CERT_BASE64 }}
+          code_sign_pfx_pass: ${{ secrets.CODE_SIGN_PFX_PASS }}
+          nuget_api_key: ${{ secrets.NUGET_API_KEY }}
