@@ -1,0 +1,213 @@
+name: 'Main Java Library Build for public Maven Releases'
+description: 'GitHub Actions composite to build, test, publish and promote a Java library (converted from Jenkins pipeline).'
+
+inputs:
+  java_version:
+    description: 'The Java version to use.'
+    required: true
+    default: 'java21'
+  is_release:
+    description: 'Whether to perform a release build.'
+    required: false
+    default: false
+  version:
+    description: 'The new version number for a release (e.g., 1.2.3).'
+    required: true
+  artifactory_username:
+    description: 'The username for Artifactory.'
+    required: true
+  artifactory_password:
+    description: 'The password for Artifactory.'
+    required: true
+  ks_github_app_id:
+    description: 'GitHub App ID for authentication.'
+    required: true
+  ks_github_app_private_key:
+    description: 'GitHub App Private Key for authentication.'
+    required: true
+  dependency_track_api_key:
+    description: 'The API key for Dependency-Track.'
+    required: true
+  reviewer:
+    description: 'Optional reviewer for the release.'
+    required: false
+    default: ''
+  gpg_passphrase:
+    description: 'The GPG passphrase for signing artifacts.'
+    required: false
+  gpg_keys:
+    description: 'The GPG keys for signing.'
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: 'Set up GitHub App'
+      id: app_token
+      uses: ks-no/github-actions/setup-github-app@main
+      with:
+        ks_github_app_id: ${{ inputs.ks_github_app_id }}
+        ks_github_app_private_key: ${{ inputs.ks_github_app_private_key }}
+
+    - name: Checkout code
+      uses: actions/checkout@v6
+      with:
+        submodules: true
+        fetch-depth: 0
+        token: ${{ steps.app_token.outputs.app_token }}
+        fetch-tags: true
+
+    - name: Switch Java Version
+      uses: actions/setup-java@v5
+      with:
+        distribution: 'temurin'
+        java-version: ${{ inputs.java_version }}
+
+    - name: Prepare JFrog CLI
+      uses: ks-no/github-actions/prepare-the-frog@main
+      with:
+        artifactory_username: ${{ inputs.artifactory_username }}
+        artifactory_password: ${{ inputs.artifactory_password }}
+
+    - name: Cache Maven packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-
+
+    - name: Snapshot - Verify POM
+      if: inputs.is_release == false
+      shell: bash
+      run: |
+        jfrog mvn -T0.5C enforcer:enforce@validate-snap
+
+    - name: Release - Set new version and tag
+      if: inputs.is_release == 'true' && (startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master'))
+      shell: bash
+      run: |
+        jfrog mvn versions:set -DnewVersion=${{ inputs.version }} -DgenerateBackupPoms=false
+        git commit -am "Release ${{ inputs.version }}"
+        git tag -a ${{ inputs.version }} -m "Release ${{ inputs.version }}"
+
+    - name: Release - Verify POM
+      if: inputs.is_release == 'true' && github.ref == 'refs/heads/main'
+      shell: bash
+      run: |
+        jfrog mvn -U -B validate
+
+    - name: Build
+      shell: bash
+      env:
+        JFROG_CLI_BUILD_NAME: ${{ github.repository }}
+        JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
+      run: |
+        jfrog mvn -DinstallAtEnd=true -U -B clean org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -Dcyclonedx.outputFormat=json install
+
+    - name: Upload SBOM to Dependency-Track
+      if: github.ref == 'refs/heads/main' && inputs.is_release == 'true'
+      shell: bash
+      run: |
+        curl -X POST --header "X-Api-Key: ${{ inputs.dependency_track_api_key }}" \
+          -F "projectName=${{ github.event.repository.name }}" \
+          -F "autoCreate=true" \
+          -F "bom=@target/bom.xml" \
+          https://dt.fiks.dev.ks.no/api/v1/bom
+
+    - name: Deploy to Maven Central
+      if: github.ref == 'refs/heads/main'
+      shell: bash
+      env:
+        MAVEN_GPG_PASSPHRASE: ${{ inputs.gpg_passphrase }}
+        GNUPGHOME: ${{ runner.temp }}/.gnupg
+      run: |
+        if [[ -n "${{ inputs.gpg_keys }}" ]]; then
+          mkdir -p $GNUPGHOME
+          echo "${{ inputs.gpg_keys }}" | gpg --batch --import
+        fi
+        PROFILE=""
+        if [[ "${{ inputs.is_release }}" == "true" ]]; then
+          PROFILE="-P release"
+        fi
+        jfrog mvn -B -e $PROFILE -Dmaven.install.skip=true -DskipTests -Dmaven.test.skip=true deploy
+
+    - name: Publish Build Info
+      shell: bash
+      env:
+        JFROG_CLI_BUILD_NAME: ${{ github.repository }}
+        JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
+      run: |
+        jfrog rt build-publish
+
+    - name: Promote Release Build
+      if: inputs.is_release == 'true' && github.ref == 'refs/heads/main'
+      shell: bash
+      env:
+        JFROG_CLI_BUILD_NAME: ${{ github.repository }}
+        JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
+      run: |
+        jfrog rt build-promote "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER" ks-maven
+
+    - name: Promote Snapshot Build
+      if: inputs.is_release == false && !startsWith(github.ref, 'refs/heads/dependabot')
+      shell: bash
+      env:
+        JFROG_CLI_BUILD_NAME: ${{ github.repository }}
+        JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
+      run: |
+        jfrog rt build-promote "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER" ks-maven-snapshot
+
+    - name: Release - Set next snapshot version
+      if: inputs.is_release == 'true' && github.ref == 'refs/heads/main'
+      shell: bash
+      run: |
+        IFS='.' read -r major minor patch <<< "${{ inputs.version }}"
+        next_patch=$((patch + 1))
+        next_snapshot_version="$major.$minor.$next_patch-SNAPSHOT"
+        echo "Next snapshot version will be $next_snapshot_version"
+        jfrog mvn versions:set -DnewVersion=$next_snapshot_version -DgenerateBackupPoms=false
+        git commit -am "Bump to next snapshot version"
+
+    - name: Generate release body and set action output
+      if: inputs.is_release == 'true' && github.ref == 'refs/heads/main'
+      id: generate_body
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ steps.app_token.outputs.app_token }}
+        REVIEWER: ${{ inputs.reviewer }}
+      run: |
+        COMMIT_LOGS=$(git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"- %s" --invert-grep --grep="^Release" --grep="^Bump to next snapshot version")
+        COMMIT_COUNT=$(echo "$COMMIT_LOGS" | grep -c . || true)
+        if [ "$COMMIT_COUNT" -gt 50 ]; then
+          BODY=$(echo "$COMMIT_LOGS" | head -n 50)
+          BODY+=$'\n\nThere are more than 50 commits but this is truncated due to github limitations'
+        else
+          BODY="$COMMIT_LOGS"
+        fi
+        BODY+=$'\n\nReleased by: '"${GITHUB_ACTOR:-${{ github.actor }}}"
+        if [[ -n "$REVIEWER" ]]; then
+          BODY+=$'\n\nReviewed-by: '"$REVIEWER"
+        fi
+        EOF_MARKER=$(uuidgen)
+        echo "release_body<<$EOF_MARKER" >> $GITHUB_OUTPUT
+        echo "$BODY" >> $GITHUB_OUTPUT
+        echo "$EOF_MARKER" >> $GITHUB_OUTPUT
+
+    - name: Create GitHub Release
+      if: inputs.is_release == 'true' && github.ref == 'refs/heads/main'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ steps.app_token.outputs.app_token }}
+      with:
+        tag_name: ${{ inputs.version }}
+        release_name: "Release ${{ inputs.version }}"
+        body: ${{ steps.generate_body.outputs.release_body }}
+        draft: false
+        prerelease: false
+
+    - name: Push changes
+      if: inputs.is_release == 'true' && github.ref == 'refs/heads/main'
+      shell: bash
+      run: |
+        git push --follow-tags
