@@ -12,7 +12,7 @@ inputs:
     default: false
   version:
     description: 'The new version number for a release (e.g., 1.2.3).'
-    required: true
+    required: false
   artifactory_username:
     description: 'The username for Artifactory.'
     required: true
