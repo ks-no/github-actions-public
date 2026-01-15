@@ -28,16 +28,15 @@ inputs:
   dependency_track_api_key:
     description: 'The API key for Dependency-Track.'
     required: true
-  reviewer:
-    description: 'Optional reviewer for the release.'
-    required: false
-    default: ''
-  gpg_passphrase:
-    description: 'The GPG passphrase for signing artifacts.'
-    required: false
-  gpg_keys:
-    description: 'The GPG keys for signing.'
-    required: false
+  gpg_private_key:
+    description: 'GPG private keys for signing artifacts.'
+    required: true
+  chart_name:
+    description: 'The name of the Helm chart.'
+    required: true
+  chart_version:
+    description: 'The version of the Helm chart.'
+    required: true
 
 runs:
   using: "composite"
@@ -118,14 +117,8 @@ runs:
     - name: Deploy to Maven Central
       if: github.ref == 'refs/heads/main'
       shell: bash
-      env:
-        MAVEN_GPG_PASSPHRASE: ${{ inputs.gpg_passphrase }}
-        GNUPGHOME: ${{ runner.temp }}/.gnupg
       run: |
-        if [[ -n "${{ inputs.gpg_keys }}" ]]; then
-          mkdir -p $GNUPGHOME
-          echo "${{ inputs.gpg_keys }}" | gpg --batch --import
-        fi
+        echo "${{ inputs.gpg_private_key }}" | gpg --import
         PROFILE=""
         if [[ "${{ inputs.is_release }}" == "true" ]]; then
           PROFILE="-P release"
