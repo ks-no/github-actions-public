@@ -1,0 +1,23 @@
+name: Set up GitHub App
+description: 'Sets up GitHub App authentication for the repository.'
+inputs:
+  ks_github_app_id:
+    description: 'GitHub App ID'
+    required: true
+  ks_github_app_private_key:
+    description: 'GitHub App Private Key'
+    required: true
+outputs:
+  app_token:
+    description: 'GitHub App installation token'
+    value: ${{ steps.app_token.outputs.token }}
+runs:
+  using: "composite"
+  steps:
+    - name: Set up GitHub App authentication
+      uses: actions/create-github-app-token@v2
+      id: app_token
+      with:
+        app-id: ${{ inputs.ks_github_app_id }}
+        private-key: ${{ inputs.ks_github_app_private_key }}
+        owner: ks-no
