@@ -55,6 +55,7 @@ runs:
       with:
         distribution: 'temurin'
         java-version: ${{ inputs.java_version }}
+        cache: 'maven'
 
     - name: Prepare JFrog CLI
       uses: ks-no/github-actions-public/prepare-the-frog@main
