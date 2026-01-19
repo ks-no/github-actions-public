@@ -75,7 +75,7 @@ runs:
       if: inputs.is_release != 'true'
       shell: bash
       run: |
-        jfrog mvn -B enforcer:enforce@validate-snap
+        jfrog mvn -U -B -P snapshot validate
 
     - name: Release - Set new version and tag
       if: inputs.is_release == 'true' && (startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master'))
