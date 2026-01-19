@@ -71,6 +71,11 @@ runs:
         restore-keys: |
           ${{ runner.os }}-maven-
 
+    - name: Set up Maven
+      uses: stCarolas/setup-maven@v5 #Remove when: https://github.com/jfrog/build-info/issues/841 is resolved
+      with:
+        maven-version: 3.9.11
+
     - name: Snapshot - Verify POM
       if: inputs.is_release != 'true'
       shell: bash
