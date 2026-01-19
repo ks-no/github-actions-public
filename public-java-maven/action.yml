@@ -72,10 +72,10 @@ runs:
           ${{ runner.os }}-maven-
 
     - name: Snapshot - Verify POM
-      if: inputs.is_release == false
+      if: inputs.is_release != 'true'
       shell: bash
       run: |
-        jfrog mvn -T0.5C enforcer:enforce@validate-snap
+        jfrog mvn -B enforcer:enforce@validate-snap
 
     - name: Release - Set new version and tag
       if: inputs.is_release == 'true' && (startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master'))
@@ -138,7 +138,7 @@ runs:
         jfrog rt build-promote "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER" ks-maven
 
     - name: Promote Snapshot Build
-      if: inputs.is_release == false && !startsWith(github.ref, 'refs/heads/dependabot')
+      if: inputs.is_release != 'true' && !startsWith(github.ref, 'refs/heads/dependabot')
       shell: bash
       env:
         JFROG_CLI_BUILD_NAME: ${{ github.repository }}
