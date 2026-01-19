@@ -37,7 +37,7 @@ runs:
   steps:
     - name: 'Set up GitHub App'
       id: app_token
-      uses: ks-no/github-actions/setup-github-app@main
+      uses: ks-no/github-actions-public/setup-github-app@main
       with:
         ks_github_app_id: ${{ inputs.ks_github_app_id }}
         ks_github_app_private_key: ${{ inputs.ks_github_app_private_key }}
@@ -57,7 +57,7 @@ runs:
         java-version: ${{ inputs.java_version }}
 
     - name: Prepare JFrog CLI
-      uses: ks-no/github-actions/prepare-the-frog@main
+      uses: ks-no/github-actions-public/prepare-the-frog@main
       with:
         artifactory_username: ${{ inputs.artifactory_username }}
         artifactory_password: ${{ inputs.artifactory_password }}
