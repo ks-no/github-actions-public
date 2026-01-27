@@ -1,0 +1,79 @@
+name: Create GitHub Release
+description: Create GitHub release with version bump
+
+inputs:
+  current-version:
+    description: 'Current version to release'
+    required: true
+  next-version:
+    description: 'Next version for bump'
+    required: true
+  release-notes:
+    description: 'Release notes'
+    required: false
+    default: 'No changes specified'
+  reviewer:
+    description: 'Reviewer name'
+    required: false
+    default: 'No review required'
+  github-token:
+    description: 'GitHub token'
+    required: true
+  actor:
+    description: 'GitHub actor (user who triggered)'
+    required: true
+  ref-name:
+    description: 'Git ref name (branch)'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Create and push tag
+      shell: bash
+      run: |
+        VERSION="${{ inputs.current-version }}"
+        git tag -a "v${VERSION}" -m "Release version ${VERSION}"
+        git push origin "v${VERSION}"
+
+    - name: Update version in project files
+      shell: bash
+      run: |
+        NEXT_VERSION="${{ inputs.next-version }}"
+        
+        for file in $(find . -name "*.csproj" -not -path "*/Test*" -not -path "*/Example*"); do
+          echo "Updating $file to version $NEXT_VERSION"
+          sed -i "s/<VersionPrefix>.*<\/VersionPrefix>/<VersionPrefix>${NEXT_VERSION}<\/VersionPrefix>/" "$file"
+        done
+
+    - name: Commit and push version bump
+      shell: bash
+      run: |
+        NEXT_VERSION="${{ inputs.next-version }}"
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add .
+        git commit -m "Bump version to ${NEXT_VERSION} [skip ci]" || echo "No changes to commit"
+        git push origin HEAD:${{ inputs.ref-name }}
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ inputs.current-version }}
+        name: Release ${{ inputs.current-version }}
+        body: |
+          ## Release Notes
+          ${{ inputs.release-notes }}
+          
+          ## Reviewer
+          ${{ inputs.reviewer }}
+          
+          ## Released by
+          @${{ inputs.actor }}
+        files: |
+          release-packages/**/*.nupkg
+          release-packages/**/*.snupkg
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}

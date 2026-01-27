@@ -1,0 +1,50 @@
+name: Push to Artifactory
+description: Push NuGet packages to Artifactory
+
+inputs:
+  artifactory-url:
+    description: 'Artifactory NuGet repository URL'
+    required: false
+    default: 'https://artifactory.fiks.ks.no/artifactory/api/nuget/nuget-all'
+  artifactory-username:
+    description: 'Artifactory username'
+    required: true
+  artifactory-password:
+    description: 'Artifactory password'
+    required: true
+  package-path:
+    description: 'Path pattern to find packages'
+    required: false
+    default: '**/Release/*.nupkg'
+  source-name:
+    description: 'NuGet source name'
+    required: false
+    default: 'nuget-all'
+
+runs:
+  using: composite
+  steps:
+    - name: Add Artifactory NuGet source
+      shell: bash
+      run: |
+        dotnet nuget add source ${{ inputs.artifactory-url }} -n ${{ inputs.source-name }} \
+          -u ${{ inputs.artifactory-username }} \
+          -p ${{ inputs.artifactory-password }} \
+          --store-password-in-clear-text
+      continue-on-error: true
+
+    - name: Push to Artifactory
+      shell: bash
+      run: |
+        for pkg in $(find . -name "*.nupkg" -path "*/Release/*"); do
+          echo "Pushing $pkg to Artifactory"
+          dotnet nuget push "$pkg" \
+            -s ${{ inputs.source-name }} \
+            --skip-duplicate
+        done
+
+    - name: Remove Artifactory NuGet source
+      if: always()
+      shell: bash
+      run: dotnet nuget remove source ${{ inputs.source-name }}
+      continue-on-error: true

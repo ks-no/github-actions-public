@@ -1,0 +1,40 @@
+name: Sign NuGet Packages
+description: Sign NuGet packages with a code signing certificate
+
+inputs:
+  certificate-base64:
+    description: 'Base64 encoded certificate'
+    required: true
+  certificate-password:
+    description: 'Certificate password'
+    required: true
+  package-path:
+    description: 'Path pattern to find packages'
+    required: false
+    default: '**/Release/*.nupkg'
+  timestamp-url:
+    description: 'Timestamp server URL'
+    required: false
+    default: 'http://timestamp.digicert.com'
+
+runs:
+  using: composite
+  steps:
+    - name: Sign NuGet packages
+      shell: bash
+      run: |
+        # Decode certificate
+        echo "${{ inputs.certificate-base64 }}" | base64 --decode > codesign.pfx
+        
+        # Sign all nupkg files
+        for pkg in $(find . -name "*.nupkg" -path "*/Release/*"); do
+          echo "Signing $pkg"
+          dotnet nuget sign "$pkg" \
+            --timestamper ${{ inputs.timestamp-url }} \
+            --certificate-path codesign.pfx \
+            --certificate-password ${{ inputs.certificate-password }} \
+            -v detailed
+        done
+        
+        # Clean up certificate
+        rm -f codesign.pfx

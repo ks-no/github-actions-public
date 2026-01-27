@@ -1,0 +1,99 @@
+name: Calculate Version
+description: Calculate version information for .NET projects
+
+inputs:
+  specified-version:
+    description: 'Specified version (X.X.X). Leave empty to auto-detect from csproj'
+    required: false
+    default: ''
+  is-release:
+    description: 'Is this a release build?'
+    required: false
+    default: 'false'
+  branch-name:
+    description: 'Branch name for pre-release versioning'
+    required: true
+  run-number:
+    description: 'Build run number'
+    required: true
+
+outputs:
+  current-version:
+    description: 'Current version'
+    value: ${{ steps.version.outputs.current-version }}
+  next-version:
+    description: 'Next version'
+    value: ${{ steps.version.outputs.next-version }}
+  full-version:
+    description: 'Full version with suffix'
+    value: ${{ steps.version.outputs.full-version }}
+  version-suffix:
+    description: 'Version suffix for pre-release'
+    value: ${{ steps.version.outputs.version-suffix }}
+  build-opts:
+    description: 'Build options for dotnet'
+    value: ${{ steps.version.outputs.build-opts }}
+
+runs:
+  using: composite
+  steps:
+    - name: Calculate version information
+      id: version
+      shell: bash
+      run: |
+        find_version() {
+          for file in $(find . -name "*.csproj" -not -path "*/Test*" -not -path "*/Example*"); do
+            version=$(grep -oP '(?<=<VersionPrefix>)[^<]+' "$file" | head -1)
+            if [ -n "$version" ]; then
+              echo "$version"
+              return
+            fi
+          done
+          echo ""
+        }
+        
+        CURRENT_VERSION="${{ inputs.specified-version }}"
+        if [ -z "$CURRENT_VERSION" ]; then
+          CURRENT_VERSION=$(find_version)
+        fi
+        
+        if [ -z "$CURRENT_VERSION" ]; then
+          echo "Error: No version found in csproj files"
+          exit 1
+        fi
+        
+        echo "Current version: $CURRENT_VERSION"
+        echo "current-version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        
+        # Calculate next version
+        IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+        NEXT_VERSION="${major}.${minor}.$((patch + 1))"
+        echo "next-version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+        echo "Next version: $NEXT_VERSION"
+        
+        # Determine if this is a release
+        IS_RELEASE="${{ inputs.is-release }}"
+        if [ "$IS_RELEASE" != "true" ]; then
+          IS_RELEASE="false"
+        fi
+        
+        # Calculate version suffix for pre-release builds
+        if [ "$IS_RELEASE" = "false" ]; then
+          BRANCH_NAME="${{ inputs.branch-name }}"
+          NORMALIZED_BRANCH=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g' | cut -c1-15)
+          VERSION_SUFFIX="alpha.${NORMALIZED_BRANCH}.${{ inputs.run-number }}"
+          FULL_VERSION="${CURRENT_VERSION}-${VERSION_SUFFIX}"
+          BUILD_OPTS="--version-suffix ${VERSION_SUFFIX}"
+        else
+          VERSION_SUFFIX=""
+          FULL_VERSION="${CURRENT_VERSION}"
+          BUILD_OPTS=""
+        fi
+        
+        echo "version-suffix=$VERSION_SUFFIX" >> $GITHUB_OUTPUT
+        echo "full-version=$FULL_VERSION" >> $GITHUB_OUTPUT
+        echo "build-opts=$BUILD_OPTS" >> $GITHUB_OUTPUT
+        
+        echo "Full version: $FULL_VERSION"
+        echo "Version suffix: $VERSION_SUFFIX"
+        echo "Build options: $BUILD_OPTS"

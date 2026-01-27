@@ -1,0 +1,31 @@
+name: Generate SBOM
+description: Generate Software Bill of Materials using CycloneDX
+
+inputs:
+  version:
+    description: 'Version to include in SBOM'
+    required: true
+  output-path:
+    description: 'Output directory for SBOM'
+    required: false
+    default: '.'
+
+runs:
+  using: composite
+  steps:
+    - name: Generate SBOM
+      shell: bash
+      run: |
+        dotnet new tool-manifest --force
+        dotnet tool install CycloneDX
+        SLNFILE=$(find . -name "*.sln" | head -1)
+        if [ -n "$SLNFILE" ]; then
+          dotnet tool run dotnet-CycloneDX \
+            -o ${{ inputs.output-path }} \
+            -dgl \
+            -sv ${{ inputs.version }} \
+            -j -d \
+            -t "$SLNFILE"
+        else
+          echo "No solution file found, skipping SBOM generation"
+        fi

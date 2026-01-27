@@ -1,0 +1,42 @@
+name: Push to NuGet.org
+description: Push NuGet packages to NuGet.org
+
+inputs:
+  api-key:
+    description: 'NuGet.org API key'
+    required: true
+  package-path:
+    description: 'Path to packages directory'
+    required: false
+    default: 'packages'
+  nuget-url:
+    description: 'NuGet.org API URL'
+    required: false
+    default: 'https://api.nuget.org/v3/index.json'
+
+runs:
+  using: composite
+  steps:
+    - name: Push to NuGet.org (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        Get-ChildItem -Path ${{ inputs.package-path }} -Filter *.nupkg -Recurse | ForEach-Object {
+          Write-Host "Pushing $($_.FullName) to NuGet.org"
+          dotnet nuget push $_.FullName `
+            -k ${{ inputs.api-key }} `
+            -s ${{ inputs.nuget-url }} `
+            --skip-duplicate
+        }
+
+    - name: Push to NuGet.org (Linux/macOS)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        find ${{ inputs.package-path }} -name "*.nupkg" | while read pkg; do
+          echo "Pushing $pkg to NuGet.org"
+          dotnet nuget push "$pkg" \
+            -k ${{ inputs.api-key }} \
+            -s ${{ inputs.nuget-url }} \
+            --skip-duplicate
+        done

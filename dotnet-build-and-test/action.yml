@@ -1,0 +1,91 @@
+name: .NET Build and Test
+description: Build and test .NET projects with Artifactory integration
+
+inputs:
+  dotnet-version:
+    description: '.NET SDK version'
+    required: false
+    default: '8.0.x'
+  build-opts:
+    description: 'Additional build options'
+    required: false
+    default: ''
+  artifactory-url:
+    description: 'Artifactory NuGet repository URL'
+    required: false
+    default: 'https://artifactory.fiks.ks.no/artifactory/api/nuget/nuget-all'
+  artifactory-username:
+    description: 'Artifactory username'
+    required: false
+  artifactory-password:
+    description: 'Artifactory password'
+    required: false
+  restore-args:
+    description: 'Additional restore arguments'
+    required: false
+    default: '--verbosity normal'
+  test-verbosity:
+    description: 'Test verbosity level'
+    required: false
+    default: 'normal'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+
+    - name: Display .NET information
+      shell: bash
+      run: dotnet --info
+
+    - name: Add Artifactory NuGet source
+      if: inputs.artifactory-username != '' && inputs.artifactory-password != ''
+      shell: bash
+      run: |
+        dotnet nuget add source ${{ inputs.artifactory-url }} -n nuget-all \
+          -u ${{ inputs.artifactory-username }} \
+          -p ${{ inputs.artifactory-password }} \
+          --store-password-in-clear-text
+      continue-on-error: true
+
+    - name: Restore dependencies
+      shell: bash
+      run: dotnet restore ${{ inputs.restore-args }}
+
+    - name: Build Debug
+      shell: bash
+      run: |
+        dotnet build --configuration Debug \
+          --no-restore \
+          --no-incremental \
+          --nologo \
+          ${{ inputs.build-opts }}
+
+    - name: Build Release
+      shell: bash
+      run: |
+        dotnet build --configuration Release \
+          --no-restore \
+          --no-incremental \
+          --nologo \
+          --verbosity detailed \
+          ${{ inputs.build-opts }}
+
+    - name: Run tests
+      shell: bash
+      run: |
+        dotnet test \
+          --configuration Release \
+          --no-restore \
+          --no-build \
+          --logger "trx;LogFileName=results.trx" \
+          --verbosity ${{ inputs.test-verbosity }}
+
+    - name: Remove Artifactory NuGet source
+      if: always() && inputs.artifactory-username != '' && inputs.artifactory-password != ''
+      shell: bash
+      run: dotnet nuget remove source nuget-all
+      continue-on-error: true
