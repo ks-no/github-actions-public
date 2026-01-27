@@ -44,11 +44,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Setup .NET
-      if: inputs.dotnet-version != ''
-      uses: actions/setup-dotnet@v5
-      with:
-        dotnet-version: ${{ inputs.dotnet-version }}
 
     - name: List NuGet sources (before)
       shell: bash
