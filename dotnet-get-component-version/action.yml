@@ -1,0 +1,65 @@
+name: Get Component Version
+description: Extract component version from project files or use specified version
+
+inputs:
+  component-package-name:
+    description: 'Component package name to search for'
+    required: false
+    default: 'KS.Fiks.IO.Client'
+  component-version:
+    description: 'Specific version to use (overrides project detection)'
+    required: false
+    default: ''
+
+outputs:
+  component-version:
+    description: 'Resolved component version'
+    value: ${{ steps.get-version.outputs.component-version }}
+  component-package:
+    description: 'Component package name'
+    value: ${{ steps.get-version.outputs.component-package }}
+
+runs:
+  using: composite
+  steps:
+    - name: Get component version from project
+      id: get-version
+      shell: bash
+      run: |
+        PACKAGE_NAME="${{ inputs.component-package-name }}"
+        VERSION="${{ inputs.component-version }}"
+        if [ -z "$VERSION" ]; then
+          # Extract version from .csproj file
+          CSPROJ_FILE=$(find . -name "*.csproj" | head -n 1)
+          if [ -n "$CSPROJ_FILE" ]; then
+            VERSION=$(grep -oP "(?<=<PackageReference Include=\"$PACKAGE_NAME\" Version=\")[^\"]*" "$CSPROJ_FILE" || echo "")
+            if [ -n "$VERSION" ]; then
+              echo "Found $PACKAGE_NAME version $VERSION in project"
+            else
+              echo "Could not find $PACKAGE_NAME in project, will use project defaults"
+            fi
+          fi
+        fi
+        
+        echo "component-version=$VERSION" >> $GITHUB_OUTPUT
+        echo "component-package=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+
+    - name: Display test configuration
+      shell: bash
+      run: |
+        echo "Testing component: ${{ steps.get-version.outputs.component-package }}"
+        if [ -n "${{ steps.get-version.outputs.component-version }}" ]; then
+          echo "Testing version: ${{ steps.get-version.outputs.component-version }}"
+        else
+          echo "Using version from project file"
+        fi
+
+    - name: Validate version
+      if: inputs.component-version != ''
+      shell: bash
+      run: |
+        version="${{ inputs.component-version }}"
+        if [[ "$version" == *"null"* ]]; then
+          echo "Error: Invalid version: $version"
+          exit 1
+        fi

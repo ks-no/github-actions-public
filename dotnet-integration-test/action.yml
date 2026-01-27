@@ -1,0 +1,113 @@
+name: .NET Integration Test
+description: Build and run integration tests with Artifactory and credentials
+
+inputs:
+  dotnet-version:
+    description: '.NET SDK version'
+    required: false
+    default: '8.0.x'
+  artifactory-url:
+    description: 'Artifactory NuGet repository URL'
+    required: false
+    default: 'https://artifactory.fiks.ks.no/artifactory/api/nuget/nuget-all'
+  artifactory-username:
+    description: 'Artifactory username'
+    required: false
+  artifactory-password:
+    description: 'Artifactory password'
+    required: false
+  source-name:
+    description: 'NuGet source name'
+    required: false
+    default: 'nuget-all'
+  configuration:
+    description: 'Build configuration'
+    required: false
+    default: 'Debug'
+  restore-args:
+    description: 'Additional restore arguments'
+    required: false
+    default: '--verbosity normal --force'
+  build-args:
+    description: 'Additional build arguments'
+    required: false
+    default: '--no-restore --no-incremental --nologo --verbosity normal'
+  test-args:
+    description: 'Additional test arguments'
+    required: false
+    default: '--no-restore --no-build --nologo'
+  test-logger:
+    description: 'Test logger configuration'
+    required: false
+    default: 'trx;LogFileName=results.trx'
+
+runs:
+  using: composite
+  steps:
+    - name: Setup .NET
+      if: inputs.dotnet-version != ''
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+
+    - name: List NuGet sources (before)
+      shell: bash
+      run: dotnet nuget list source
+
+    - name: Add Artifactory NuGet source
+      if: inputs.artifactory-username != '' && inputs.artifactory-password != ''
+      shell: bash
+      run: |
+        dotnet nuget add source ${{ inputs.artifactory-url }} \
+          -n ${{ inputs.source-name }} \
+          -u ${{ inputs.artifactory-username }} \
+          -p ${{ inputs.artifactory-password }} \
+          --store-password-in-clear-text
+      continue-on-error: true
+
+    - name: List NuGet sources (after add)
+      shell: bash
+      run: dotnet nuget list source
+
+    - name: Restore dependencies
+      shell: bash
+      run: dotnet restore ${{ inputs.restore-args }}
+
+    - name: Remove Artifactory NuGet source (cleanup)
+      if: always() && inputs.artifactory-username != '' && inputs.artifactory-password != ''
+      shell: bash
+      run: |
+        dotnet nuget remove source ${{ inputs.source-name }} || true
+        # Extra safety: verify removal
+        if dotnet nuget list source | grep -q "${{ inputs.source-name }}"; then
+          echo "Warning: Source still exists, forcing removal"
+          dotnet nuget remove source ${{ inputs.source-name }} --force || true
+        fi
+      continue-on-error: true
+
+    - name: Build
+      shell: bash
+      run: dotnet build --configuration ${{ inputs.configuration }} ${{ inputs.build-args }}
+
+    - name: Clean up test artifacts from previous runs
+      shell: bash
+      run: |
+        echo "Cleaning up previous test results..."
+        rm -rf **/TestResults/*.trx || true
+        echo "Cleanup complete"
+
+    - name: Run tests
+      shell: bash
+      run: |
+        dotnet test \
+          --configuration ${{ inputs.configuration }} \
+          --logger "${{ inputs.test-logger }}" \
+          ${{ inputs.test-args }}
+
+    - name: Final cleanup - Remove NuGet source
+      if: always() && inputs.artifactory-username != '' && inputs.artifactory-password != ''
+      shell: bash
+      run: |
+        echo "Final cleanup: Removing NuGet source"
+        dotnet nuget remove source ${{ inputs.source-name }} || true
+      continue-on-error: true

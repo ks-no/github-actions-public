@@ -1,0 +1,36 @@
+name: Add NuGet Package to Projects
+description: Add a specific NuGet package version to all csproj files
+
+inputs:
+  package-name:
+    description: 'NuGet package name to add'
+    required: true
+  package-version:
+    description: 'Package version to add'
+    required: true
+  no-restore:
+    description: 'Skip automatic restore after adding package'
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Add package to all projects
+      shell: bash
+      run: |
+        files=$(find . -name "*.csproj")
+        if [ -z "$files" ]; then
+          echo "Error: No csproj files found"
+          exit 1
+        fi
+        
+        RESTORE_FLAG=""
+        if [ "${{ inputs.no-restore }}" = "true" ]; then
+          RESTORE_FLAG="-n"
+        fi
+        
+        for file in $files; do
+          echo "Adding package ${{ inputs.package-name }} version ${{ inputs.package-version }} to $file"
+          dotnet add "$file" package ${{ inputs.package-name }} -v ${{ inputs.package-version }} $RESTORE_FLAG
+        done

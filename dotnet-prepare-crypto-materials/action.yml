@@ -1,0 +1,51 @@
+name: Prepare Cryptographic Materials
+description: Decode and prepare certificates and keys for testing
+
+inputs:
+  maskinporten-cert-base64:
+    description: 'Base64 encoded Maskinporten certificate'
+    required: true
+  fiksio-private-key-base64:
+    description: 'Base64 encoded Fiks IO private key'
+    required: true
+  cert-output-filename:
+    description: 'Output filename for certificate'
+    required: false
+    default: 'maskinporten_test_cert.p12'
+  key-output-filename:
+    description: 'Output filename for private key'
+    required: false
+    default: 'fiksio_private_key.pem'
+
+outputs:
+  cert-path:
+    description: 'Path to decoded certificate file'
+    value: ${{ steps.prepare.outputs.cert-path }}
+  key-path:
+    description: 'Path to decoded private key file'
+    value: ${{ steps.prepare.outputs.key-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Prepare cryptographic materials
+      id: prepare
+      shell: bash
+      run: |
+        CERT_FILE="${{ inputs.cert-output-filename }}"
+        KEY_FILE="${{ inputs.key-output-filename }}"
+        
+        echo "${{ inputs.maskinporten-cert-base64 }}" | base64 --decode > "$CERT_FILE"
+        echo "${{ inputs.fiksio-private-key-base64 }}" | base64 --decode > "$KEY_FILE"
+        
+        CERT_PATH="$PWD/$CERT_FILE"
+        KEY_PATH="$PWD/$KEY_FILE"
+        
+        echo "MASKINPORTEN_CERT=$CERT_PATH" >> $GITHUB_ENV
+        echo "FIKSIO_PRIVAT_NOKKEL=$KEY_PATH" >> $GITHUB_ENV
+        
+        echo "cert-path=$CERT_PATH" >> $GITHUB_OUTPUT
+        echo "key-path=$KEY_PATH" >> $GITHUB_OUTPUT
+        
+        echo "Certificate prepared at: $CERT_PATH"
+        echo "Private key prepared at: $KEY_PATH"
