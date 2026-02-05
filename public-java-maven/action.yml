@@ -91,7 +91,7 @@ runs:
         git tag -a ${{ inputs.version }} -m "Release ${{ inputs.version }}"
 
     - name: Release - Verify POM
-      if: inputs.is_release == 'true' && github.ref == 'refs/heads/main'
+      if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
       shell: bash
       run: |
         jfrog mvn -U -B validate
@@ -105,7 +105,7 @@ runs:
         jfrog mvn -DinstallAtEnd=true -U -B clean org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -Dcyclonedx.outputFormat=json install
 
     - name: Upload SBOM to Dependency-Track
-      if: github.ref == 'refs/heads/main' && inputs.is_release == 'true'
+      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && inputs.is_release == 'true'
       shell: bash
       run: |
         curl -X POST --header "X-Api-Key: ${{ inputs.dependency_track_api_key }}" \
@@ -115,7 +115,7 @@ runs:
           https://dt.fiks.dev.ks.no/api/v1/bom
 
     - name: Deploy to Maven Central
-      if: github.ref == 'refs/heads/main'
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
       shell: bash
       run: |
         echo "${{ inputs.gpg_private_key }}" | gpg --import
@@ -134,7 +134,7 @@ runs:
         jfrog rt build-publish
 
     - name: Promote Release Build
-      if: inputs.is_release == 'true' && github.ref == 'refs/heads/main'
+      if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
       shell: bash
       env:
         JFROG_CLI_BUILD_NAME: ${{ github.repository }}
@@ -152,7 +152,7 @@ runs:
         jfrog rt build-promote "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER" ks-maven-snapshot
 
     - name: Release - Set next snapshot version
-      if: inputs.is_release == 'true' && github.ref == 'refs/heads/main'
+      if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
       shell: bash
       run: |
         IFS='.' read -r major minor patch <<< "${{ inputs.version }}"
@@ -163,7 +163,7 @@ runs:
         git commit -am "Bump to next snapshot version"
 
     - name: Generate release body and set action output
-      if: inputs.is_release == 'true' && github.ref == 'refs/heads/main'
+      if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
       id: generate_body
       shell: bash
       env:
@@ -188,7 +188,7 @@ runs:
         echo "$EOF_MARKER" >> $GITHUB_OUTPUT
 
     - name: Create GitHub Release
-      if: inputs.is_release == 'true' && github.ref == 'refs/heads/main'
+      if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ steps.app_token.outputs.app_token }}
@@ -200,7 +200,7 @@ runs:
         prerelease: false
 
     - name: Push changes
-      if: inputs.is_release == 'true' && github.ref == 'refs/heads/main'
+      if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
       shell: bash
       run: |
         git push --follow-tags

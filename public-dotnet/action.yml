@@ -131,7 +131,7 @@ runs:
           fi
 
       - name: Push to NuGet.org
-        if: (github.ref_name == 'main' || inputs.push_to_nuget_org == 'true') && !startsWith(github.ref_name, 'dependabot')
+        if: (github.ref_name == 'main' || github.ref_name == 'master' || inputs.push_to_nuget_org == 'true') && !startsWith(github.ref_name, 'dependabot')
         env:
           NUGET_API_KEY: ${{ inputs.nuget_api_key }}
         shell: bash
