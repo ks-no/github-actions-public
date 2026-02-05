@@ -1,0 +1,42 @@
+name: Generate Release Notes
+description: Generate release notes using git-releasenotes with reviewer information
+
+inputs:
+  github-token:
+    description: 'GitHub token for authentication'
+    required: true
+  actor:
+    description: 'GitHub actor (user who triggered the action)'
+    required: true
+  reviewer:
+    description: 'Reviewer name'
+    required: false
+    default: ''
+
+outputs:
+  release-body:
+    description: 'Generated release notes with metadata'
+    value: ${{ steps.generate_body.outputs.release_body }}
+
+runs:
+  using: composite
+  steps:
+    - name: Generate release notes
+      id: generate_body
+      shell: bash
+      env: 
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        RELEASE_NOTES=$(git-releasenotes -T -p)
+        
+        BODY="$RELEASE_NOTES"
+        BODY+=$'\n\nReleased by: ${{ inputs.actor }}'
+        
+        if [[ -n "${{ inputs.reviewer }}" ]]; then
+          BODY+=$'\n\nReviewed-by: ${{ inputs.reviewer }}'
+        fi
+
+        EOF_MARKER=$(uuidgen)
+        echo "release_body<<$EOF_MARKER" >> $GITHUB_OUTPUT
+        echo "$BODY" >> $GITHUB_OUTPUT
+        echo "$EOF_MARKER" >> $GITHUB_OUTPUT
