@@ -162,30 +162,14 @@ runs:
         jfrog mvn versions:set -DnewVersion=$next_snapshot_version -DgenerateBackupPoms=false
         git commit -am "Bump to next snapshot version"
 
-    - name: Generate release body and set action output
+    - name: Generate Release Notes
       if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+      uses: ks-no/github-actions-public/generate-release-notes@main
       id: generate_body
-      shell: bash
-      env:
-        GITHUB_TOKEN: ${{ steps.app_token.outputs.app_token }}
-        REVIEWER: ${{ inputs.reviewer }}
-      run: |
-        COMMIT_LOGS=$(git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"- %s" --invert-grep --grep="^Release" --grep="^Bump to next snapshot version")
-        COMMIT_COUNT=$(echo "$COMMIT_LOGS" | grep -c . || true)
-        if [ "$COMMIT_COUNT" -gt 50 ]; then
-          BODY=$(echo "$COMMIT_LOGS" | head -n 50)
-          BODY+=$'\n\nThere are more than 50 commits but this is truncated due to github limitations'
-        else
-          BODY="$COMMIT_LOGS"
-        fi
-        BODY+=$'\n\nReleased by: '"${GITHUB_ACTOR:-${{ github.actor }}}"
-        if [[ -n "$REVIEWER" ]]; then
-          BODY+=$'\n\nReviewed-by: '"$REVIEWER"
-        fi
-        EOF_MARKER=$(uuidgen)
-        echo "release_body<<$EOF_MARKER" >> $GITHUB_OUTPUT
-        echo "$BODY" >> $GITHUB_OUTPUT
-        echo "$EOF_MARKER" >> $GITHUB_OUTPUT
+      with:
+        github-token: ${{ steps.app_token.outputs.app_token }}
+        actor: ${{ github.actor }}
+        reviewer: ${{ inputs.reviewer }}
 
     - name: Create GitHub Release
       if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
