@@ -118,7 +118,7 @@ runs:
         curl -X POST --header "X-Api-Key: ${{ inputs.dependency_track_api_key }}" \
           -F "projectName=${{ github.event.repository.name }}" \
           -F "autoCreate=true" \
-          -F "bom=@target/bom.xml" \
+          -F "bom=@target/bom.json" \
           https://dt.fiks.dev.ks.no/api/v1/bom
 
     - name: Configure Maven Settings for Maven Central
