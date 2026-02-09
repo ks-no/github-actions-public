@@ -7,6 +7,10 @@ inputs:
   ks_github_app_private_key:
     description: 'GitHub App Private Key'
     required: true
+  is_release:
+    description: 'Indicates if the current build is a release build.'
+    required: false
+    default: 'false'
 outputs:
   app_token:
     description: 'GitHub App installation token'
@@ -21,3 +25,10 @@ runs:
         app-id: ${{ inputs.ks_github_app_id }}
         private-key: ${{ inputs.ks_github_app_private_key }}
         owner: ks-no
+
+    - name: Set up github config
+      if: ${{ inputs.is_release == 'true' }}
+      shell: bash
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"

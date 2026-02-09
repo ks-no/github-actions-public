@@ -47,6 +47,7 @@ runs:
       with:
         ks_github_app_id: ${{ inputs.ks_github_app_id }}
         ks_github_app_private_key: ${{ inputs.ks_github_app_private_key }}
+        is_release: ${{ inputs.is_release }}
 
     - name: Checkout code
       uses: actions/checkout@v6
