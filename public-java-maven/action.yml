@@ -31,6 +31,12 @@ inputs:
   gpg_private_key:
     description: 'GPG private keys for signing artifacts.'
     required: true
+  sonatype-portal-ossrh-username:
+    description: 'Maven Central (OSSRH) username for publishing to Maven Central.'
+    required: true
+  sonatype-portal-ossrh-password:
+    description: 'Maven Central (OSSRH) token/password for publishing to Maven Central.'
+    required: true
 
 runs:
   using: "composite"
@@ -113,6 +119,26 @@ runs:
           -F "autoCreate=true" \
           -F "bom=@target/bom.xml" \
           https://dt.fiks.dev.ks.no/api/v1/bom
+
+    - name: Configure Maven Settings for Maven Central
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      shell: bash
+      run: |
+        mkdir -p ~/.m2
+        cat > ~/.m2/settings.xml << 'EOF'
+        <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                                      http://maven.apache.org/xsd/settings-1.0.0.xsd">
+          <servers>
+            <server>
+              <id>portal-ossrh</id>
+              <username>${{ inputs.sonatype-portal-ossrh-username }}</username>
+              <password>${{ inputs.sonatype-portal-ossrh-password }}</password>
+            </server>
+          </servers>
+        </settings>
+        EOF
 
     - name: Deploy to Maven Central
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
