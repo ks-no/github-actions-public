@@ -23,7 +23,6 @@ runs:
           dotnet tool run dotnet-CycloneDX \
             "$SLNFILE" \
             --output ${{ inputs.output-path }} \
-            --disable-github-licenses \
             --set-version ${{ inputs.version }} \
             --json
         else
