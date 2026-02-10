@@ -21,11 +21,11 @@ runs:
         SLNFILE=$(find . -name "*.sln" | head -1)
         if [ -n "$SLNFILE" ]; then
           dotnet tool run dotnet-CycloneDX \
-            -o ${{ inputs.output-path }} \
-            -dgl \
-            -sv ${{ inputs.version }} \
-            -j -d \
-            -t "$SLNFILE"
+            "$SLNFILE" \
+            --output ${{ inputs.output-path }} \
+            --disable-github-licenses \
+            --set-version ${{ inputs.version }} \
+            --json
         else
           echo "No solution file found, skipping SBOM generation"
         fi
