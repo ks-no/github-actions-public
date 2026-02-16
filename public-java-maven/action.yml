@@ -31,6 +31,9 @@ inputs:
   gpg_private_key:
     description: 'GPG private keys for signing artifacts.'
     required: true
+  gpg_passphrase:
+    description: 'Passphrase for the GPG private key.'
+    required: true
   sonatype-portal-ossrh-username:
     description: 'Maven Central (OSSRH) username for publishing to Maven Central.'
     required: true
