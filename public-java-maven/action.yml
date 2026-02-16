@@ -161,10 +161,16 @@ runs:
         EOF
 
     - name: Deploy to Maven Central
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
       shell: bash
+      env:
+        MAVEN_GPG_PASSPHRASE: ${{ inputs.gpg_passphrase }}
+        GNUPGHOME: ${{ runner.temp }}/.gnupg
       run: |
-        echo "${{ inputs.gpg_private_key }}" | gpg --import
+        if [[ -n "${{ inputs.gpg_private_key }}" ]]; then
+          mkdir -p $GNUPGHOME
+          echo "${{ inputs.gpg_private_key }}" | gpg --batch --import
+        fi
         PROFILE=""
         if [[ "${{ inputs.is_release }}" == "true" ]]; then
           PROFILE="-P release"
