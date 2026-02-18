@@ -178,6 +178,8 @@ runs:
         JFROG_CLI_BUILD_NAME: ${{ github.repository }}
         JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
       run: |
+        echo "Delaying promote to ensure all artifacts are available in Artifactory before promotion."
+        sleep 15
         jfrog rt build-promote "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER" ks-maven
 
     - name: Promote Snapshot Build
