@@ -170,8 +170,8 @@ runs:
     - name: Publish Build Info
       shell: bash
       env:
-        JFROG_CLI_BUILD_NAME: env.JFROG_CLI_BUILD_NAME
-        JFROG_CLI_BUILD_NUMBER: env.JFROG_CLI_BUILD_NUMBER
+        JFROG_CLI_BUILD_NAME: ks-maven
+        JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
       run: |
         jfrog rt build-publish
 
@@ -180,7 +180,7 @@ runs:
       shell: bash
       env:
         JFROG_CLI_BUILD_NAME: ks-maven
-        JFROG_CLI_BUILD_NUMBER: env.JFROG_CLI_BUILD_NUMBER
+        JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
       run: |
         echo "Delaying promote to ensure all artifacts are available in Artifactory before promotion."
         sleep 15
