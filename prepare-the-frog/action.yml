@@ -28,4 +28,4 @@ runs:
     - name: Configure JFrog Maven
       shell: bash
       run: |
-        jfrog mvn-config --repo-deploy-releases ks-maven --repo-deploy-snapshots maven-local-staging --repo-resolve-releases maven-all --repo-resolve-snapshots maven-all
+        jfrog mvn-config --repo-deploy-releases maven-local-staging --repo-deploy-snapshots maven-local-staging --repo-resolve-releases maven-all --repo-resolve-snapshots maven-all
