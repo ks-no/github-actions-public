@@ -28,11 +28,23 @@ runs:
       run: |
         if ! command -v git-releasenotes &> /dev/null; then
           echo "Installing git-releasenotes..."
-          GIT_RELEASENOTES_URL=$(curl -s https://api.github.com/repos/ks-no/fiks-git-releasenotes/releases/latest | grep browser_download_url | grep linux | grep -v sha256 | cut -d '"' -f 4)
-          echo "Downloading $GIT_RELEASENOTES_URL"
-          curl -L "$GIT_RELEASENOTES_URL" -o git-releasenotes
-          chmod +x git-releasenotes
-          sudo mv git-releasenotes /usr/local/bin/
+          set -e
+          GIT_RELEASENOTES_URL=$(curl -s https://api.github.com/repos/ks-no/fiks-git-releasenotes/releases/latest | grep browser_download_url | grep linux | grep -v sha256 | cut -d '"' -f 4 | head -n1)
+          if [ -n "$GIT_RELEASENOTES_URL" ]; then
+            echo "Downloading $GIT_RELEASENOTES_URL"
+            curl -L "$GIT_RELEASENOTES_URL" -o git-releasenotes
+            chmod +x git-releasenotes
+            sudo mv git-releasenotes /usr/local/bin/
+          else
+            echo "Prebuilt binary not found, building from source..."
+            if ! command -v cargo &> /dev/null; then
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+              source "$HOME/.cargo/env"
+            fi
+            cargo install --git https://github.com/ks-no/fiks-git-releasenotes.git
+            sudo cp "$HOME/.cargo/bin/git-releasenotes" /usr/local/bin/git-releasenotes
+            sudo chmod +x /usr/local/bin/git-releasenotes
+          fi
         fi
     - name: Generate release notes
       id: generate_body
