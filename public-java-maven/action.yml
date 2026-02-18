@@ -40,6 +40,9 @@ inputs:
   sonatype-portal-ossrh-password:
     description: 'Maven Central (OSSRH) token/password for publishing to Maven Central.'
     required: true
+  maven_settings_xml:
+    description: 'Maven settings.xml for deploying to Maven Central.'
+    required: false
 
 runs:
   using: "composite"
@@ -85,6 +88,14 @@ runs:
       uses: stCarolas/setup-maven@v5 #Remove when: https://github.com/jfrog/build-info/issues/841 is resolved
       with:
         maven-version: 3.9.11
+
+    - name: Use Maven settings.xml
+      shell: bash
+      run: |
+        mkdir -p ~/.m2
+        if [ -n "${{ inputs.maven_settings_xml }}" ]; then
+          echo "${{ inputs.maven_settings_xml }}" > ~/.m2/settings.xml
+        fi
 
     - name: Snapshot - Verify POM
       if: inputs.is_release != 'true'
