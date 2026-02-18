@@ -34,12 +34,6 @@ inputs:
   gpg_passphrase:
     description: 'Passphrase for the GPG private key.'
     required: true
-  sonatype-portal-ossrh-username:
-    description: 'Maven Central (OSSRH) username for publishing to Maven Central.'
-    required: true
-  sonatype-portal-ossrh-password:
-    description: 'Maven Central (OSSRH) token/password for publishing to Maven Central.'
-    required: true
   maven_settings_xml:
     description: 'Maven settings.xml for deploying to Maven Central.'
     required: false
@@ -91,11 +85,10 @@ runs:
 
     - name: Use Maven settings.xml
       shell: bash
+      if: inputs.maven_settings_xml != ''
       run: |
         mkdir -p ~/.m2
-        if [ -n "${{ inputs.maven_settings_xml }}" ]; then
-          echo "${{ inputs.maven_settings_xml }}" > ~/.m2/settings.xml
-        fi
+        echo "${{ inputs.maven_settings_xml }}" > ~/.m2/settings.xml
 
     - name: Snapshot - Verify POM
       if: inputs.is_release != 'true'
