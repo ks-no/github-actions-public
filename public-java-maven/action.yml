@@ -170,7 +170,7 @@ runs:
     - name: Publish Build Info
       shell: bash
       env:
-        JFROG_CLI_BUILD_NAME: ${{ github.ref_name }}
+        JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
         JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
       run: |
         jfrog rt build-publish
@@ -179,7 +179,7 @@ runs:
       if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
       shell: bash
       env:
-        JFROG_CLI_BUILD_NAME: ${{ github.ref_name }}
+        JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
         JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
       run: |
         echo "Delaying promote to ensure all artifacts are available in Artifactory before promotion."
@@ -190,7 +190,7 @@ runs:
       if: inputs.is_release != 'true' && !startsWith(github.ref, 'refs/heads/dependabot')
       shell: bash
       env:
-        JFROG_CLI_BUILD_NAME: ${{ github.ref_name }}
+        JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
         JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
       run: |
         jfrog rt build-promote $JFROG_CLI_BUILD_NAME $JFROG_CLI_BUILD_NUMBER
