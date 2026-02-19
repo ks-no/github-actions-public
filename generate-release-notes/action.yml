@@ -14,7 +14,7 @@ inputs:
     default: ''
 
 outputs:
-  release-body:
+  release_body:
     description: 'Generated release notes with metadata'
     value: ${{ steps.generate_body.outputs.release_body }}
 
