@@ -29,7 +29,7 @@ runs:
         if ! command -v git-releasenotes &> /dev/null; then
           echo "Installing git-releasenotes..."
           set -e
-          GIT_RELEASENOTES_URL=$(curl -s https://api.github.com/repos/ks-no/fiks-git-releasenotes/releases/latest | grep browser_download_url | grep linux | grep -v sha256 | cut -d '"' -f 4 | head -n1)
+          GIT_RELEASENOTES_URL=$(curl -s https://api.github.com/repos/leifjantzen/git-releasenotes/releases/latest | grep browser_download_url | grep linux | grep -v sha256 | cut -d '"' -f 4 | head -n1)
           if [ -n "$GIT_RELEASENOTES_URL" ]; then
             echo "Downloading $GIT_RELEASENOTES_URL"
             curl -L "$GIT_RELEASENOTES_URL" -o git-releasenotes
@@ -41,7 +41,7 @@ runs:
               curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
               source "$HOME/.cargo/env"
             fi
-            cargo install --git https://github.com/ks-no/fiks-git-releasenotes.git
+            cargo install --git https://github.com/leifjantzen/git-releasenotes.git
             sudo cp "$HOME/.cargo/bin/git-releasenotes" /usr/local/bin/git-releasenotes
             sudo chmod +x /usr/local/bin/git-releasenotes
           fi
