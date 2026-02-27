@@ -35,8 +35,8 @@ runs:
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         VERSION="${{ inputs.current-version }}"
-        git tag -a "v${VERSION}" -m "Release version ${VERSION}"
-        git push origin "v${VERSION}"
+        git tag -a "${VERSION}" -m "Release version ${VERSION}"
+        git push origin "${VERSION}"
 
     - name: Update version in project files
       shell: bash
