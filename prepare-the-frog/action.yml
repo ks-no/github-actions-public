@@ -13,7 +13,7 @@ runs:
   using: "composite"
   steps:
     - name: Setup JFrog CLI
-      uses: jfrog/setup-jfrog-cli@v4
+      uses: jfrog/setup-jfrog-cli@86dacb6974c66cc99e7651e1205f6581aaddba9a #v4.10.0
       with:
         version: latest
 
