@@ -1,0 +1,52 @@
+name: 'Deploy to 013'
+description: 'Sends a deployment message to AWS SQS after authenticating with OIDC.'
+inputs:
+  helm_chart:
+    description: 'Helm-chart to deploy'
+    required: true
+  environment:
+    description: 'Deployment environment'
+    required: true
+  version:
+    description: 'Version to deploy'
+    required: true
+  ks_github_app_id:
+    description: 'KS GitHub App ID'
+    required: true
+  ks_github_app_private_key:
+    description: 'KS GitHub App Private Key'
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: 'Set up Github App'
+      id: app_token
+      uses: ks-no/github-actions-public/setup-github-app@main
+      with:
+        ks_github_app_id: ${{ inputs.ks_github_app_id }}
+        ks_github_app_private_key: ${{ inputs.ks_github_app_private_key }}
+
+    - name: Configure AWS credentials from GitHub OIDC
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6.0.0
+      with:
+        role-to-assume: 'arn:aws:iam::461074034890:role/github-to-aws'
+        aws-region: 'eu-north-1'
+        role-skip-session-tagging: true
+
+    - name: Get User Full Name
+      id: user_info
+      env:
+        GH_TOKEN: ${{ steps.app_token.outputs.app_token }}
+      shell: bash
+      run: |
+        USER_FULL_NAME=$(gh api "/users/${{ github.actor }}" --jq '.name // ""')
+        if [ -z "$USER_FULL_NAME" ]; then
+          USER_FULL_NAME="${{ github.actor }}"
+        fi
+        echo "user_full_name=$USER_FULL_NAME" >> $GITHUB_OUTPUT
+
+    - name: Send deployment message to SQS
+      shell: bash
+      run: |
+        aws sts get-caller-identity
+        aws sqs send-message --queue-url 'https://sqs.eu-north-1.amazonaws.com/461074034890/deployment-queue' --message-body "{\"version\": \"${{ inputs.version }}\", \"helm_chart\": \"${{ inputs.helm_chart }}\", \"environment\": \"${{ inputs.environment }}\", \"repo\": \"${{ github.repository }}\", \"user\": \"${{ steps.user_info.outputs.user_full_name }}\"}"
