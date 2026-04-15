@@ -22,6 +22,11 @@ on:
         required: false
         type: string
         default: ''
+      runner:
+        description: 'The runner to use. Use "ubuntu-latest" for public repos.'
+        required: false
+        type: string
+        default: 'self-hosted, x64'
       component_test_project:
         description: 'GitHub repo name (under ks-no) of the component test project to trigger after build (e.g. fiks-io-klient-java-komponent-test). Leave empty to skip.'
         required: false
@@ -46,7 +51,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: [self-hosted, x64]
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 30
     concurrency:
       group: ${{ inputs.is_release == true && format('release-{0}', github.repository) || format('autobuild-{0}-{1}', github.repository, github.ref_name) }}
@@ -68,12 +73,20 @@ jobs:
           fetch-tags: true
 
       - name: Switch Java Version
+        if: inputs.runner!= 'ubuntu-latest'
         run: |
           JAVA_VERSION_CMD="${{ inputs.java_version }}"
           if [[ "$JAVA_VERSION_CMD" =~ ^[0-9]+$ ]]; then
             JAVA_VERSION_CMD="java$JAVA_VERSION_CMD"
           fi
           $JAVA_VERSION_CMD
+
+      - name: Switch Java Version (Ubuntu)
+        if: inputs.runner == 'ubuntu-latest'
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 #v5.2.0
+        with:
+          java-version: ${{ inputs.java_version }}
+          distribution: 'temurin'
 
       - name: Prepare JFrog CLI
         uses: ks-no/github-actions-public/prepare-the-frog@main
