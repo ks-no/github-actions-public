@@ -1,0 +1,34 @@
+name: 'Checkout'
+description: 'Composite action for checking out code, pinned to a specific SHA of actions/checkout.'
+inputs:
+  token:
+    description: 'GitHub token or app token to use for checkout'
+    required: false
+    default: ${{ github.token }}
+  submodules:
+    description: 'Whether to checkout submodules'
+    required: false
+    default: 'true'
+  fetch-depth:
+    description: 'Number of commits to fetch. 0 indicates all history for all branches and tags.'
+    required: false
+    default: '0'
+  fetch-tags:
+    description: 'Whether to fetch tags'
+    required: false
+    default: 'true'
+  clean:
+    description: 'Whether to execute `git clean -ffdx && git reset --hard HEAD` before fetching'
+    required: false
+    default: 'true'
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.2
+      with:
+        clean: ${{ inputs.clean }}
+        token: ${{ inputs.token }}
+        submodules: ${{ inputs.submodules }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        fetch-tags: ${{ inputs.fetch-tags }}

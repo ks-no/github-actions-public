@@ -60,7 +60,7 @@ jobs:
           ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
 
       - name: Checkout code
-        uses: ks-no/github-actions/checkout@main
+        uses: ks-no/github-actions-public/checkout@main
         with:
           submodules: true
           fetch-depth: 0
