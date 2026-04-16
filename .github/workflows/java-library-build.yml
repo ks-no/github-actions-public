@@ -193,11 +193,14 @@ jobs:
           JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
         run: |
           BUILD_INFO=$(jfrog rt curl -s "/api/build/${JFROG_CLI_BUILD_NAME}/${JFROG_CLI_BUILD_NUMBER}")
-          VERSION=$(echo "$BUILD_INFO" \
-            | jq -r '[.buildInfo.modules[].artifacts[]?.name // empty] | map(select(endswith(".pom"))) | .[0]' \
-            | sed -E 's/^[^-]+-(.*)\.pom$/\1/')
+          MODULE_ID=$(echo "$BUILD_INFO" | jq -r '.buildInfo.modules[0].id')
+          ARTIFACT_ID=$(echo "$MODULE_ID" | cut -d: -f2)
+          POM_NAME=$(echo "$BUILD_INFO" \
+            | jq -r --arg aid "$ARTIFACT_ID" '[.buildInfo.modules[].artifacts[]?.name // empty] | map(select(startswith($aid) and endswith(".pom"))) | .[0]')
+          VERSION="${POM_NAME#"${ARTIFACT_ID}-"}"
+          VERSION="${VERSION%.pom}"
           if [[ -z "$VERSION" || "$VERSION" == "null" ]]; then
-            VERSION=$(echo "$BUILD_INFO" | jq -r '[.buildInfo.modules[].id] | map(split(":")) | map(select(length==3)) | .[0][2]')
+            VERSION=$(echo "$MODULE_ID" | cut -d: -f3)
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
