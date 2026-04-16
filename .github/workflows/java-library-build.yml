@@ -113,7 +113,7 @@ jobs:
         run: |
           BASE_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | sed 's/-SNAPSHOT//')
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          UNIQUE_VERSION="${BASE_VERSION}-${SHORT_SHA}"
+          UNIQUE_VERSION="${BASE_VERSION}-${SHORT_SHA}-SNAPSHOT"
           echo "version=$UNIQUE_VERSION" >> $GITHUB_OUTPUT
           jfrog mvn versions:set -DnewVersion=$UNIQUE_VERSION -DgenerateBackupPoms=false
 
