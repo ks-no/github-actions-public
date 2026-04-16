@@ -198,24 +198,12 @@ jobs:
       - name: Read built version
         if: inputs.component_test_project != ''
         id: built_version
-        env:
-          JFROG_CLI_BUILD_NAME: ${{ github.repository }}
-          JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
         run: |
-          BUILD_INFO=$(jfrog rt curl -s "/api/build/${JFROG_CLI_BUILD_NAME}/${JFROG_CLI_BUILD_NUMBER}")
-          VERSION=$(echo "$BUILD_INFO" | jq -r '
-            .buildInfo.modules[] as $m |
-            ($m.id | split(":") | .[1]) as $aid |
-            ($m.id | split(":") | last) as $sv |
-            ($m.artifacts[]?.name // empty) |
-            select(startswith($aid + "-") and endswith(".pom") and (. != ($aid + "-" + $sv + ".pom"))) |
-            ltrimstr($aid + "-") | rtrimstr(".pom")
-          ' | head -1)
-          if [[ -z "$VERSION" ]]; then
-            VERSION=$(echo "$BUILD_INFO" | jq -r '.buildInfo.modules[0].id | split(":") | last')
+          if [[ "${{ inputs.is_release }}" == "true" ]]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ steps.snapshot_version.outputs.version }}" >> $GITHUB_OUTPUT
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Resolved artifact version: $VERSION"
 
       - name: Trigger component tests
         if: inputs.component_test_project != ''
