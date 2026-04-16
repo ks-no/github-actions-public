@@ -121,13 +121,6 @@ jobs:
         run: |
           jfrog mvn -DinstallAtEnd=true -U -B clean org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom install
 
-      - name: Read built version from POM
-        if: inputs.component_test_project != ''
-        id: pom_version
-        run: |
-          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Upload SBOM to Dependency-Track
         if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && inputs.is_release == true
         run: |
@@ -192,6 +185,22 @@ jobs:
         run: |
           jfrog rt build-promote "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER" ks-maven-snapshot
 
+      - name: Read built version
+        if: inputs.component_test_project != ''
+        id: built_version
+        run: |
+          GROUP_ID=$(mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout)
+          ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          if [[ "$VERSION" == *-SNAPSHOT ]]; then
+            GROUP_PATH=$(echo "$GROUP_ID" | tr '.' '/')
+            TIMESTAMP_VERSION=$(jfrog rt search "ks-maven-snapshot/${GROUP_PATH}/${ARTIFACT_ID}/${VERSION}/${ARTIFACT_ID}-*.pom" --sort-by=created --sort-order=desc --limit=1 | jq -r '.[0].path' | sed -E "s|.*${ARTIFACT_ID}-(.*)\.pom|\1|")
+            if [[ -n "$TIMESTAMP_VERSION" && "$TIMESTAMP_VERSION" != "null" ]]; then
+              VERSION="$TIMESTAMP_VERSION"
+            fi
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Trigger component tests
         if: inputs.component_test_project != ''
         id: trigger_component_tests
@@ -202,7 +211,7 @@ jobs:
             const intOwner = 'ks-no';
             const intRepo = '${{ inputs.component_test_project }}';
             const workflowId = 'component-test.yml';
-            const componentVersion = '${{ steps.pom_version.outputs.version }}';
+            const componentVersion = '${{ steps.built_version.outputs.version }}';
             const clientOwner = context.repo.owner;
             const clientRepo  = context.repo.repo;
             const clientSha   = context.sha;
