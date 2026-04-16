@@ -188,16 +188,16 @@ jobs:
       - name: Read built version
         if: inputs.component_test_project != ''
         id: built_version
+        env:
+          JFROG_CLI_BUILD_NAME: ${{ github.repository }}
+          JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
         run: |
-          GROUP_ID=$(mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout)
-          ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)
-          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          if [[ "$VERSION" == *-SNAPSHOT ]]; then
-            GROUP_PATH=$(echo "$GROUP_ID" | tr '.' '/')
-            TIMESTAMP_VERSION=$(jfrog rt search "ks-maven-snapshot/${GROUP_PATH}/${ARTIFACT_ID}/${VERSION}/${ARTIFACT_ID}-*.pom" --sort-by=created --sort-order=desc --limit=1 | jq -r '.[0].path' | sed -E "s|.*${ARTIFACT_ID}-(.*)\.pom|\1|")
-            if [[ -n "$TIMESTAMP_VERSION" && "$TIMESTAMP_VERSION" != "null" ]]; then
-              VERSION="$TIMESTAMP_VERSION"
-            fi
+          BUILD_INFO=$(jfrog rt curl -s "/api/build/${JFROG_CLI_BUILD_NAME}/${JFROG_CLI_BUILD_NUMBER}")
+          VERSION=$(echo "$BUILD_INFO" \
+            | jq -r '[.buildInfo.modules[].artifacts[]?.name // empty] | map(select(endswith(".pom"))) | .[0]' \
+            | sed -E 's/^[^-]+-(.*)\.pom$/\1/')
+          if [[ -z "$VERSION" || "$VERSION" == "null" ]]; then
+            VERSION=$(echo "$BUILD_INFO" | jq -r '[.buildInfo.modules[].id] | map(split(":")) | map(select(length==3)) | .[0][2]')
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
