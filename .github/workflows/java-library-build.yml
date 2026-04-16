@@ -215,7 +215,17 @@ jobs:
           if [[ "${{ inputs.is_release }}" == "true" ]]; then
             echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
           else
-            echo "version=${{ steps.snapshot_version.outputs.version }}" >> $GITHUB_OUTPUT
+            GROUP_PATH=$(mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout | tr '.' '/')
+            ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)
+            VERSION=${{ steps.snapshot_version.outputs.version }}
+            TIMESTAMPED=$(jfrog rt search "ks-maven-snapshot/${GROUP_PATH}/${ARTIFACT_ID}/${VERSION}/${ARTIFACT_ID}-*.jar" --sort-by=created --sort-order=desc --limit=1 | jq -r '.[0].path' | sed -E "s|.*${ARTIFACT_ID}-(.*)\.jar|\1|")
+            if [[ -n "$TIMESTAMPED" && "$TIMESTAMPED" != "null" ]]; then
+              echo "version=$TIMESTAMPED" >> $GITHUB_OUTPUT
+              echo "Resolved timestamped version: $TIMESTAMPED"
+            else
+              echo "version=$VERSION" >> $GITHUB_OUTPUT
+              echo "Falling back to SNAPSHOT version: $VERSION"
+            fi
           fi
 
       - name: Trigger component tests
