@@ -1,0 +1,13 @@
+name: 'Log into Docker Hub'
+description: 'Log into Docker Hub.'
+inputs:
+  token: 
+    description: 'The token for authenticating with Docker Hub.'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Log into Docker Hub
+      shell: bash
+      run: echo "${{ inputs.token }}" | docker login -u "ksdigitalno" --password-stdin
