@@ -141,7 +141,7 @@ jobs:
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           find . -name "*.jar" -path "*/target/*.jar" ! -name "*-sources.jar" ! -name "*-javadoc.jar" ! -name "original-*.jar" | while read JAR; do
             ARTIFACT_ID=$(basename "$(dirname "$(dirname "$JAR")")")
-            jfrog rt upload "$JAR" "maven-local-staging/${GROUP_PATH}/${ARTIFACT_ID}/${VERSION}/${ARTIFACT_ID}-${VERSION}.jar" --build-name="$JFROG_CLI_BUILD_NAME" --build-number="$JFROG_CLI_BUILD_NUMBER"
+            jfrog rt upload "$JAR" "ks-maven-snapshot/${GROUP_PATH}/${ARTIFACT_ID}/${VERSION}/${ARTIFACT_ID}-${VERSION}.jar"
           done
 
       - name: Upload SBOM to Dependency-Track
@@ -201,7 +201,7 @@ jobs:
           prerelease: false
 
       - name: Promote Snapshot Build
-        if: inputs.is_release == false && !startsWith(github.ref, 'refs/heads/dependabot')
+        if: inputs.is_release == false && !startsWith(github.ref, 'refs/heads/dependabot') && inputs.component_test_project == ''
         env:
           JFROG_CLI_BUILD_NAME: ${{ github.repository }}
           JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
