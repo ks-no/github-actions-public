@@ -131,6 +131,19 @@ jobs:
         run: |
           jfrog mvn -DinstallAtEnd=true -U -B clean org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom install
 
+      - name: Upload artifacts to Artifactory
+        if: inputs.is_release == false && inputs.component_test_project != ''
+        env:
+          JFROG_CLI_BUILD_NAME: ${{ github.repository }}
+          JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          GROUP_PATH=$(mvn help:evaluate -Dexpression=project.groupId -q -DforceStdout | tr '.' '/')
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          find . -name "*.jar" -path "*/target/*.jar" ! -name "*-sources.jar" ! -name "*-javadoc.jar" ! -name "original-*.jar" | while read JAR; do
+            ARTIFACT_ID=$(basename "$(dirname "$(dirname "$JAR")")")
+            jfrog rt upload "$JAR" "maven-local-staging/${GROUP_PATH}/${ARTIFACT_ID}/${VERSION}/${ARTIFACT_ID}-${VERSION}.jar" --build-name="$JFROG_CLI_BUILD_NAME" --build-number="$JFROG_CLI_BUILD_NUMBER"
+          done
+
       - name: Upload SBOM to Dependency-Track
         if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && inputs.is_release == true
         run: |
