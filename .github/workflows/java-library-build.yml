@@ -203,14 +203,16 @@ jobs:
           JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
         run: |
           BUILD_INFO=$(jfrog rt curl -s "/api/build/${JFROG_CLI_BUILD_NAME}/${JFROG_CLI_BUILD_NUMBER}")
-          MODULE_ID=$(echo "$BUILD_INFO" | jq -r '.buildInfo.modules[0].id')
-          ARTIFACT_ID=$(echo "$MODULE_ID" | cut -d: -f2)
-          POM_NAME=$(echo "$BUILD_INFO" \
-            | jq -r --arg aid "$ARTIFACT_ID" '[.buildInfo.modules[].artifacts[]?.name // empty] | map(select(startswith($aid) and endswith(".pom"))) | .[0]')
-          VERSION="${POM_NAME#"${ARTIFACT_ID}-"}"
-          VERSION="${VERSION%.pom}"
-          if [[ -z "$VERSION" || "$VERSION" == "null" ]]; then
-            VERSION=$(echo "$MODULE_ID" | cut -d: -f3)
+          VERSION=$(echo "$BUILD_INFO" | jq -r '
+            .buildInfo.modules[] as $m |
+            ($m.id | split(":") | .[1]) as $aid |
+            ($m.id | split(":") | last) as $sv |
+            ($m.artifacts[]?.name // empty) |
+            select(startswith($aid + "-") and endswith(".pom") and (. != ($aid + "-" + $sv + ".pom"))) |
+            ltrimstr($aid + "-") | rtrimstr(".pom")
+          ' | head -1)
+          if [[ -z "$VERSION" ]]; then
+            VERSION=$(echo "$BUILD_INFO" | jq -r '.buildInfo.modules[0].id | split(":") | last')
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Resolved artifact version: $VERSION"
