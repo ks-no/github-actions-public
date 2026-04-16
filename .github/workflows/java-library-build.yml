@@ -113,7 +113,7 @@ jobs:
         run: |
           BASE_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | sed 's/-SNAPSHOT//')
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          UNIQUE_VERSION="${BASE_VERSION}-${SHORT_SHA}-SNAPSHOT"
+          UNIQUE_VERSION="${BASE_VERSION}-${SHORT_SHA}"
           echo "version=$UNIQUE_VERSION" >> $GITHUB_OUTPUT
           jfrog mvn versions:set -DnewVersion=$UNIQUE_VERSION -DgenerateBackupPoms=false
 
@@ -198,12 +198,22 @@ jobs:
       - name: Read built version
         if: inputs.component_test_project != ''
         id: built_version
+        env:
+          JFROG_CLI_BUILD_NAME: ${{ github.repository }}
+          JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
         run: |
-          if [[ "${{ inputs.is_release }}" == "true" ]]; then
-            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${{ steps.snapshot_version.outputs.version }}" >> $GITHUB_OUTPUT
+          BUILD_INFO=$(jfrog rt curl -s "/api/build/${JFROG_CLI_BUILD_NAME}/${JFROG_CLI_BUILD_NUMBER}")
+          MODULE_ID=$(echo "$BUILD_INFO" | jq -r '.buildInfo.modules[0].id')
+          ARTIFACT_ID=$(echo "$MODULE_ID" | cut -d: -f2)
+          POM_NAME=$(echo "$BUILD_INFO" \
+            | jq -r --arg aid "$ARTIFACT_ID" '[.buildInfo.modules[].artifacts[]?.name // empty] | map(select(startswith($aid) and endswith(".pom"))) | .[0]')
+          VERSION="${POM_NAME#"${ARTIFACT_ID}-"}"
+          VERSION="${VERSION%.pom}"
+          if [[ -z "$VERSION" || "$VERSION" == "null" ]]; then
+            VERSION=$(echo "$MODULE_ID" | cut -d: -f3)
           fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Resolved artifact version: $VERSION"
 
       - name: Trigger component tests
         if: inputs.component_test_project != ''
