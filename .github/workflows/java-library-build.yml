@@ -191,11 +191,12 @@ jobs:
 
 
       - name: read current version for use in component tests
-        if: inputs.component_test_project != '' && inputs.component_test_version == ''
+        if: inputs.component_test_project != ''
         id: pom_version
         run: |
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Trigger component tests
         if: inputs.component_test_project != ''
         id: trigger_component_tests
