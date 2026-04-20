@@ -217,7 +217,7 @@ jobs:
             const intOwner = 'ks-no';
             const intRepo = '${{ inputs.component_test_project }}';
             const workflowId = 'component-test.yml';
-            const componentVersion = ${{ inputs.component_test_version }} || '${{ steps.pom_version.outputs.version }}';
+            const componentVersion = '${{ inputs.component_test_version }}' || '${{ steps.pom_version.outputs.version }}';
             const clientOwner = context.repo.owner;
             const clientRepo  = context.repo.repo;
             const clientSha   = context.sha;
