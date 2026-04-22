@@ -99,7 +99,7 @@ jobs:
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
 
       - name: Cache Maven packages
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 #v5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae #v5.0.5
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
@@ -181,7 +181,7 @@ jobs:
 
       - name: Create GitHub Release
         if: inputs.is_release == true && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe #v2.6.1
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda #v3.0.0
         env:
           GITHUB_TOKEN: ${{ steps.app_token.outputs.app_token }}
         with:
@@ -210,7 +210,7 @@ jobs:
       - name: Trigger component tests
         if: inputs.component_test_project != ''
         id: trigger_component_tests
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           github-token: ${{ steps.app_token.outputs.app_token }}
           script: |
@@ -253,7 +253,7 @@ jobs:
 
       - name: Wait for component tests
         if: inputs.component_test_project != ''
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           github-token: ${{ steps.app_token.outputs.app_token }}
           script: |
