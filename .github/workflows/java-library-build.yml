@@ -36,10 +36,6 @@ on:
         description: 'Version to use for component tests. If not set, the version from the built POM will be used.'
         required: false
         type: string
-      snapshot_version:
-        description: 'Custom SNAPSHOT version to set before building (e.g., 3.6.4-SNAPSHOT). Use when the current SNAPSHOT version cannot be redeployed to Artifactory. Remember to add -SNAPSHOT suffix.'
-        required: false
-        type: string
     secrets:
       ARTIFACTORY_USERNAME:
         required: true
@@ -122,11 +118,6 @@ jobs:
           jfrog rt bce
           jfrog rt bag
           jfrog rt bdi --max-builds=10 --async
-
-      - name: Snapshot - Set custom version
-        if: inputs.snapshot_version != '' && inputs.is_release == false
-        run: |
-          jfrog mvn versions:set -DnewVersion=${{ inputs.snapshot_version }} -DgenerateBackupPoms=false
 
       - name: Snapshot - Verify POM
         if: inputs.is_release == false
@@ -250,7 +241,10 @@ jobs:
               workflow_id: workflowId,
               ref: 'main',
               inputs: {
-                componentVersion
+                componentVersion,
+                clientOwner,
+                clientRepo,
+                checkRunId: String(checkRun.id)
               }
             });
 
