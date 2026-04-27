@@ -1,0 +1,91 @@
+name: 'SBOM Upload and Report'
+description: >
+  Uploads a CycloneDX SBOM to Dependency-Track, tags the project with the
+  owning team from CODEOWNERS, and posts a vulnerability summary to the
+  GitHub Actions Job Summary. Fails softly — never blocks the pipeline.
+
+inputs:
+  dependency_track_api_key:
+    description: 'API key for Dependency-Track (must have PORTFOLIO_MANAGEMENT + TAG_MANAGEMENT permissions).'
+    required: true
+  project_name:
+    description: 'Dependency-Track project name (typically github.event.repository.name).'
+    required: false
+    default: ${{ github.event.repository.name }}
+  bom_file:
+    description: >
+      Path to the CycloneDX BOM file. Leave empty to auto-discover
+      (searches target/bom.xml, target/bom.json, bom.xml, bom.json).
+    required: false
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Upload SBOM to Dependency-Track
+      id: sbom_upload
+      shell: bash
+      env:
+        DT_API_KEY: ${{ inputs.dependency_track_api_key }}
+        DT_PROJECT_NAME: ${{ inputs.project_name }}
+        DT_BOM_FILE: ${{ inputs.bom_file }}
+        DT_BASE_URL: "https://dt.fiks.dev.ks.no"
+        RUNNER_TEMP: ${{ runner.temp }}
+      run: |
+        set -uo pipefail
+
+        if [[ -z "$DT_API_KEY" ]]; then
+          echo "::warning::dependency_track_api_key is empty — skipping SBOM upload and report"
+          exit 0
+        fi
+
+        BOM_FILE="$DT_BOM_FILE"
+        if [[ -z "$BOM_FILE" ]]; then
+          for candidate in target/bom.xml target/bom.json bom.xml bom.json; do
+            if [[ -f "$candidate" ]]; then
+              BOM_FILE="$candidate"
+              echo "Auto-discovered BOM file: $BOM_FILE"
+              break
+            fi
+          done
+        fi
+
+        if [[ -z "$BOM_FILE" || ! -f "$BOM_FILE" ]]; then
+          echo "::warning::No BOM file found — skipping SBOM upload"
+          exit 0
+        fi
+
+        RESPONSE_FILE="$RUNNER_TEMP/dt-bom-response.json"
+
+        HTTP_CODE=$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
+          -X POST -H "X-Api-Key: $DT_API_KEY" \
+          -F "projectName=$DT_PROJECT_NAME" \
+          -F "autoCreate=true" \
+          -F "bom=@$BOM_FILE" \
+          "$DT_BASE_URL/api/v1/bom") || true
+
+        if ! [[ "$HTTP_CODE" =~ ^[0-9]{3}$ ]]; then
+          echo "::warning::SBOM upload to Dependency-Track failed (no HTTP response)"
+        elif [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
+          TOKEN=$(jq -r '.token // empty' "$RESPONSE_FILE" 2>/dev/null || true)
+          echo "bom_token=$TOKEN" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::SBOM upload to Dependency-Track returned HTTP $HTTP_CODE"
+          cat "$RESPONSE_FILE" 2>/dev/null || true
+        fi
+        rm -f "$RESPONSE_FILE"
+
+    - name: Tag DT project with owning team
+      if: inputs.dependency_track_api_key != ''
+      uses: ks-no/github-actions-public/tag-dt-project-by-team@main
+      with:
+        dependency_track_api_key: ${{ inputs.dependency_track_api_key }}
+        project_name: ${{ inputs.project_name }}
+
+    - name: DT vulnerability summary
+      if: inputs.dependency_track_api_key != ''
+      uses: ks-no/github-actions-public/dt-vulnerability-summary@main
+      with:
+        dependency_track_api_key: ${{ inputs.dependency_track_api_key }}
+        project_name: ${{ inputs.project_name }}
+        bom_upload_token: ${{ steps.sbom_upload.outputs.bom_token }}

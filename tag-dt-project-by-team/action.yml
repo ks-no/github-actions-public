@@ -1,0 +1,188 @@
+name: 'Tag Dependency-Track Project by CODEOWNERS Team'
+description: >
+  Parses CODEOWNERS for the primary team slug and idempotently applies a
+  team:<slug> tag to the corresponding Dependency-Track project.
+  Fails softly — never blocks the pipeline.
+
+inputs:
+  dependency_track_api_key:
+    description: 'API key for Dependency-Track (must have TAG_MANAGEMENT + PORTFOLIO_MANAGEMENT permissions).'
+    required: true
+  project_name:
+    description: 'Dependency-Track project name (typically github.event.repository.name).'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Tag DT project with owning team from CODEOWNERS
+      shell: bash
+      env:
+        DT_API_KEY: ${{ inputs.dependency_track_api_key }}
+        DT_PROJECT_NAME: ${{ inputs.project_name }}
+        DT_BASE_URL: "https://dt.fiks.dev.ks.no"
+      run: |
+        set -uo pipefail
+
+        # ── Helper: soft-fail with a warning ──────────────────────────
+        warn_and_exit() {
+          echo "::warning::DT tagging: $1"
+          exit 0
+        }
+
+        # ── 0. Bail early if API key is empty ─────────────────────────
+        if [[ -z "$DT_API_KEY" ]]; then
+          warn_and_exit "No DT API key provided; skipping team tagging."
+        fi
+
+        # ── 1. Locate CODEOWNERS ──────────────────────────────────────
+        CODEOWNERS_FILE=""
+        for candidate in ".github/CODEOWNERS" "CODEOWNERS" "docs/CODEOWNERS"; do
+          if [[ -f "$candidate" ]]; then
+            CODEOWNERS_FILE="$candidate"
+            break
+          fi
+        done
+
+        if [[ -z "$CODEOWNERS_FILE" ]]; then
+          warn_and_exit "No CODEOWNERS file found; skipping team tagging for '$DT_PROJECT_NAME'."
+        fi
+
+        echo "::debug::Using CODEOWNERS file: $CODEOWNERS_FILE"
+
+        # ── 2. Parse primary team ─────────────────────────────────────
+        # Look for the * catch-all line first
+        TEAM_SLUG=""
+
+        # Read catch-all line (* pattern) — take the first @ks-no/team-* match
+        CATCHALL_LINE=$(grep -E '^\*[[:space:]]' "$CODEOWNERS_FILE" | head -n1 || true)
+
+        if [[ -n "$CATCHALL_LINE" ]]; then
+          TEAM_SLUG=$(echo "$CATCHALL_LINE" \
+            | grep -oE '@ks-no/team-[a-zA-Z0-9_-]+' \
+            | head -n1 || true)
+          echo "::debug::Catch-all line found: $CATCHALL_LINE"
+        fi
+
+        # Fallback: most frequent @ks-no/team-* across the entire file
+        if [[ -z "$TEAM_SLUG" ]]; then
+          TEAM_SLUG=$(grep -oE '@ks-no/team-[a-zA-Z0-9_-]+' "$CODEOWNERS_FILE" \
+            | sort | uniq -c | sort -rn \
+            | head -n1 | awk '{print $2}' || true)
+          if [[ -n "$TEAM_SLUG" ]]; then
+            echo "::debug::No catch-all; using most frequent team: $TEAM_SLUG"
+          fi
+        fi
+
+        # Log individual-user owners for diagnostics
+        INDIVIDUAL_OWNERS=$(grep -oE '@[a-zA-Z0-9_-]+' "$CODEOWNERS_FILE" \
+          | grep -v '@ks-no/' || true)
+        if [[ -n "$INDIVIDUAL_OWNERS" ]]; then
+          echo "::debug::Skipped individual owners: $(echo "$INDIVIDUAL_OWNERS" | tr '\n' ' ')"
+        fi
+
+        if [[ -z "$TEAM_SLUG" ]]; then
+          warn_and_exit "No @ks-no/team-* entry found in $CODEOWNERS_FILE; skipping."
+        fi
+
+        # ── 3. Normalize tag name ─────────────────────────────────────
+        # Strip @ks-no/team- prefix, lowercase
+        SLUG="${TEAM_SLUG#@ks-no/team-}"
+        TAG_NAME="team:${SLUG,,}"
+
+        echo "Resolved team tag: $TAG_NAME (from $TEAM_SLUG)"
+
+        # ── 4. Look up DT project UUID (with retry) ──────────────────
+        # Enforce HTTPS
+        if [[ "$DT_BASE_URL" != https://* ]]; then
+          warn_and_exit "DT base URL must use HTTPS."
+        fi
+
+        BASE_URL="${DT_BASE_URL%/}"
+
+        # URL-encode the project name
+        ENCODED_NAME=$(jq -rn --arg v "$DT_PROJECT_NAME" '$v | @uri')
+
+        PROJECT_UUID=""
+        for attempt in 1 2 3; do
+          PROJECT_JSON=$(curl -fsS \
+            -H "X-Api-Key: $DT_API_KEY" \
+            "$BASE_URL/api/v1/project/lookup?name=$ENCODED_NAME" 2>/dev/null) || true
+
+          PROJECT_UUID=$(echo "$PROJECT_JSON" | jq -r '.uuid // empty' 2>/dev/null || true)
+
+          if [[ -n "$PROJECT_UUID" ]]; then
+            break
+          fi
+
+          if [[ $attempt -lt 3 ]]; then
+            echo "::debug::Project lookup attempt $attempt returned empty, retrying in 2s..."
+            sleep 2
+          fi
+        done
+
+        if [[ -z "$PROJECT_UUID" ]]; then
+          warn_and_exit "Could not find DT project '$DT_PROJECT_NAME' after 3 attempts."
+        fi
+
+        # Validate UUID format
+        if ! [[ "$PROJECT_UUID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+          warn_and_exit "Unexpected project UUID format: $PROJECT_UUID"
+        fi
+
+        echo "::debug::DT project UUID: $PROJECT_UUID"
+
+        # ── 5. Get current tags on the project ────────────────────────
+        CURRENT_TAGS_JSON=$(curl -fsS \
+          -H "X-Api-Key: $DT_API_KEY" \
+          "$BASE_URL/api/v1/project/$PROJECT_UUID" 2>/dev/null) \
+          || warn_and_exit "Failed to fetch project details for UUID $PROJECT_UUID."
+
+        # Extract tag names as a newline-separated list
+        CURRENT_TAGS=$(echo "$CURRENT_TAGS_JSON" | jq -r '.tags[]?.name // empty' 2>/dev/null || true)
+
+        # Filter existing team:* tags
+        OLD_TEAM_TAGS=$(echo "$CURRENT_TAGS" | grep -E '^team:' || true)
+
+        echo "::debug::Current team tags: $(echo "$OLD_TEAM_TAGS" | tr '\n' ', ')"
+
+        # ── 6. Idempotent tag update ──────────────────────────────────
+        # Check if already correctly tagged
+        if [[ "$OLD_TEAM_TAGS" == "$TAG_NAME" ]]; then
+          echo "Project '$DT_PROJECT_NAME' already tagged with '$TAG_NAME'; nothing to do."
+          exit 0
+        fi
+
+        # 6a. Create the tag (idempotent — 201 if new, 200 if exists)
+        curl -fsS -X PUT \
+          -H "X-Api-Key: $DT_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d "[\"$TAG_NAME\"]" \
+          "$BASE_URL/api/v1/tag" >/dev/null 2>&1 \
+          || warn_and_exit "Failed to create tag '$TAG_NAME'."
+
+        # 6b. Assign the tag to the project
+        curl -fsS -X POST \
+          -H "X-Api-Key: $DT_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d "[\"$PROJECT_UUID\"]" \
+          "$BASE_URL/api/v1/tag/$(jq -rn --arg v "$TAG_NAME" '$v | @uri')/project" >/dev/null 2>&1 \
+          || warn_and_exit "Failed to assign tag '$TAG_NAME' to project '$DT_PROJECT_NAME'."
+
+        # 6c. Remove stale team:* tags
+        if [[ -n "$OLD_TEAM_TAGS" ]]; then
+          while IFS= read -r old_tag; do
+            if [[ -n "$old_tag" && "$old_tag" != "$TAG_NAME" ]]; then
+              echo "::debug::Removing stale tag: $old_tag"
+              curl -fsS -X DELETE \
+                -H "X-Api-Key: $DT_API_KEY" \
+                -H "Content-Type: application/json" \
+                -d "[\"$PROJECT_UUID\"]" \
+                "$BASE_URL/api/v1/tag/$(jq -rn --arg v "$old_tag" '$v | @uri')/project" >/dev/null 2>&1 \
+                || echo "::warning::DT tagging: Failed to remove stale tag '$old_tag'."
+            fi
+          done <<< "$OLD_TEAM_TAGS"
+        fi
+
+        # ── 7. Done ───────────────────────────────────────────────────
+        echo "::notice::Tagged DT project '$DT_PROJECT_NAME' with '$TAG_NAME'"
