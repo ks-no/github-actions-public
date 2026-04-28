@@ -24,7 +24,7 @@ runs:
             "$SLNFILE" \
             --output ${{ inputs.output-path }} \
             --set-version ${{ inputs.version }} \
-            --spec-version 1.5 \
+            --spec-version 1.5 \ # Må endres til nyeste versjon når den er tilgjengelig i DT
             --json
         else
           echo "No solution file found, skipping SBOM generation"
