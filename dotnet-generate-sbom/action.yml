@@ -24,6 +24,7 @@ runs:
             "$SLNFILE" \
             --output ${{ inputs.output-path }} \
             --set-version ${{ inputs.version }} \
+            --spec-version 1.5 \
             --json
         else
           echo "No solution file found, skipping SBOM generation"
