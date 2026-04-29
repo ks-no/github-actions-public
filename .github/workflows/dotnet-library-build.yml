@@ -38,11 +38,6 @@ on:
         type: boolean
         required: false
         default: true
-      fetch-submodules:
-        description: 'Fetch git submodules?'
-        type: boolean
-        required: false
-        default: true
       integration-test-repo:
         description: 'Integration test repo name under ks-no (e.g., fiks-io-client-dotnet-integration-tests). Leave empty to skip.'
         type: string
@@ -68,10 +63,6 @@ on:
         type: string
         required: false
         default: 'normal'
-      ks-runner-app-id:
-        description: 'GitHub App ID for KS Runner (from vars.KS_RUNNER_APP_ID)'
-        type: string
-        required: true
     secrets:
       ARTIFACTORY_USERNAME:
         required: true
@@ -82,6 +73,8 @@ on:
       CODE_SIGN_PFX_PASS:
         required: true
       NUGET_API_KEY:
+        required: true
+      KS_RUNNER_APP_ID:
         required: true
       KS_RUNNER_PRIVATE_KEY:
         required: true
@@ -195,7 +188,7 @@ jobs:
         if: inputs.integration-test-repo != ''
         uses: ks-no/github-actions-public/setup-github-app@main
         with:
-          ks_github_app_id: ${{ inputs.ks-runner-app-id }}
+          ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
           ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
 
       - name: Trigger Integration Tests
@@ -220,7 +213,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-          submodules: ${{ inputs.fetch-submodules }}
+          submodules: true
 
       - name: Build and Test
         uses: ks-no/github-actions-public/dotnet-build-and-test@main
@@ -229,8 +222,8 @@ jobs:
           build-opts: ${{ needs.initialize.outputs.build-opts }}
           artifactory-username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory-password: ${{ secrets.ARTIFACTORY_PASSWORD }}
-          restore-args: ${{ inputs.windows-restore-args || '--verbosity normal' }}
-          test-verbosity: ${{ inputs.windows-test-verbosity }}
+          restore-args: ${{ inputs.windows-restore-args || '--disable-parallel --verbosity detailed' }}
+          test-verbosity: ${{ inputs.windows-test-verbosity || 'detailed'}}
 
       - name: Test Results
         uses: dorny/test-reporter@v1
@@ -282,14 +275,14 @@ jobs:
         id: setup-github-app
         uses: ks-no/github-actions-public/setup-github-app@main
         with:
-          ks_github_app_id: ${{ inputs.ks-runner-app-id }}
+          ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
           ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
           fetch-tags: true
-          submodules: ${{ inputs.fetch-submodules }}
+          submodules: true
           token: ${{ steps.setup-github-app.outputs.app_token }}
 
       - uses: actions/download-artifact@v4
