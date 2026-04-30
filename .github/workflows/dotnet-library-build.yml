@@ -63,15 +63,25 @@ on:
         type: string
         required: false
         default: 'normal'
+      sign-packages:
+        description: 'Sign NuGet packages? (automatically enabled if is-release or push-to-nuget-org is true)'
+        type: boolean
+        required: false
+        default: false
+      require-keylocker-on-release:
+        description: 'For release builds, fail if KeyLocker is not available? (prevents accidental fallback to PFX)'
+        type: boolean
+        required: false
+        default: false
     secrets:
       ARTIFACTORY_USERNAME:
         required: true
       ARTIFACTORY_PASSWORD:
         required: true
       CODE_SIGN_CERT_BASE64:
-        required: true
+          required: false
       CODE_SIGN_PFX_PASS:
-        required: true
+          required: false
       NUGET_API_KEY:
         required: true
       KS_RUNNER_APP_ID:
@@ -80,6 +90,14 @@ on:
         required: true
       DEPENDENCY_TRACK_API_KEY:
         required: true
+      SM_API_KEY:
+        required: false
+      SM_CLIENT_CERT_FILE_B64:
+        required: false
+      SM_CLIENT_CERT_PASSWORD:
+        required: false
+      SM_CODE_SIGNING_CERT_SHA1_HASH:
+        required: false
 
 permissions:
   contents: write
@@ -162,13 +180,25 @@ jobs:
         with:
           dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
 
-      - name: Sign Packages
+      - name: Sign Packages (PFX - unsigned builds only)
+        if: ${{ !(inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages) }}
         uses: ks-no/github-actions-public/dotnet-sign-nuget-packages@main
         with:
           certificate-base64: ${{ secrets.CODE_SIGN_CERT_BASE64 }}
           certificate-password: ${{ secrets.CODE_SIGN_PFX_PASS }}
 
-      - name: Upload Packages
+      - name: Upload Packages (unsigned for KeyLocker signing)
+        if: inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages-unsigned
+          path: |
+            **/Release/*.nupkg
+            **/Release/*.snupkg
+          if-no-files-found: error
+
+      - name: Upload Packages (already signed)
+        if: ${{ !(inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages) }}
         uses: actions/upload-artifact@v4
         with:
           name: nuget-packages
@@ -177,11 +207,154 @@ jobs:
             **/Release/*.snupkg
           if-no-files-found: error
 
+      - name: Push to Artifactory (unsigned builds only)
+        if: ${{ !(inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages) }}
+        uses: ks-no/github-actions-public/dotnet-push-to-artifactory@main
+        with:
+          artifactory-username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory-password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+
+      - name: Set up GitHub App
+        id: setup-github-app
+        if: inputs.integration-test-repo != '' && !(inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages)
+        uses: ks-no/github-actions-public/setup-github-app@main
+        with:
+          ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
+          ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+
+      - name: Trigger Integration Tests (unsigned builds only)
+        if: inputs.integration-test-repo != '' && !(inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages)
+        uses: ks-no/github-actions-public/trigger-remote-integration-tests@main
+        with:
+          app-token: ${{ steps.setup-github-app.outputs.app_token }}
+          integration-test-repo: ${{ inputs.integration-test-repo }}
+          integration-test-workflow: ${{ inputs.integration-test-workflow }}
+          component-version: ${{ needs.initialize.outputs.full-version }}
+          component-package-name: ${{ inputs.integration-test-package-name }}
+          wait-for-completion: ${{ inputs.is-release && 'true' || 'false' }}
+
+  sign-packages:
+    name: Sign NuGet Packages
+    needs: [initialize, build-linux]
+    if: |
+      inputs.is-release == true ||
+      inputs.push-to-nuget-org == true ||
+      inputs.sign-packages == true
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Determine signing method
+        id: signing-method
+        shell: pwsh
+        env:
+          HAS_KEYLOCKER: ${{ secrets.SM_API_KEY != '' && secrets.SM_CLIENT_CERT_FILE_B64 != '' && secrets.SM_CLIENT_CERT_PASSWORD != '' && secrets.SM_CODE_SIGNING_CERT_SHA1_HASH != '' }}
+          HAS_PFX: ${{ secrets.CODE_SIGN_CERT_BASE64 != '' && secrets.CODE_SIGN_PFX_PASS != '' }}
+          IS_RELEASE: ${{ inputs.is-release }}
+          REQUIRE_KEYLOCKER: ${{ inputs.require-keylocker-on-release }}
+        run: |
+          $hasKeyLocker = $env:HAS_KEYLOCKER -eq 'true'
+          $hasPfx = $env:HAS_PFX -eq 'true'
+          $isRelease = $env:IS_RELEASE -eq 'true'
+          $requireKeyLocker = $env:REQUIRE_KEYLOCKER -eq 'true'
+          
+          if (-not $hasKeyLocker -and -not $hasPfx) {
+            Write-Output "ERROR: Neither KeyLocker nor PFX credentials are available"
+            exit 1
+          }
+          
+          if ($requireKeyLocker -and $isRelease -and -not $hasKeyLocker) {
+            Write-Output "ERROR: Release build requires KeyLocker, but credentials not available"
+            exit 1
+          }
+          
+          if ($hasKeyLocker) {
+            Write-Output "use-keylocker=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            Write-Output "✓ Using KeyLocker for code signing"
+          } else {
+            Write-Output "use-keylocker=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            Write-Output "⚠ Using PFX as fallback for code signing"
+          }
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages-unsigned
+          path: packages
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      - name: Decode KeyLocker client certificate
+        if: steps.signing-method.outputs.use-keylocker == 'true'
+        shell: pwsh
+        run: |
+          $certPath = Join-Path $env:RUNNER_TEMP 'sm_client_cert.p12'
+          [System.IO.File]::WriteAllBytes($certPath, [System.Convert]::FromBase64String('${{ secrets.SM_CLIENT_CERT_FILE_B64 }}'))
+          "SM_CLIENT_CERT_FILE=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Set up KeyLocker (DigiCert)
+        if: steps.signing-method.outputs.use-keylocker == 'true'
+        uses: digicert/code-signing-software-trust-action@6687ca63bb7d70538f70d62c790382a77e6caadb
+        with:
+          simple-signing-mode: false
+        env:
+          SM_HOST: https://one.digicert.com
+          SM_API_KEY: ${{ secrets.SM_API_KEY }}
+          SM_CLIENT_CERT_FILE: ${{ env.SM_CLIENT_CERT_FILE }}
+          SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
+
+      - name: Verify KeyLocker installation
+        if: steps.signing-method.outputs.use-keylocker == 'true'
+        shell: pwsh
+        run: |
+          $env:PATH += ";C:\Program Files\DigiCert\DigiCert One\bin"
+          smctl windows ksp list
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "ERROR: KeyLocker (KSP) verification failed"
+            exit 1
+          }
+          Write-Output "✓ KeyLocker (KSP) verified"
+
+      - name: Sign packages with KeyLocker
+        if: steps.signing-method.outputs.use-keylocker == 'true'
+        uses: ks-no/github-actions-public/dotnet-sign-nuget-packages-keylocker@main
+        with:
+          sm-certificate-fingerprint: ${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }}
+          package-root: packages
+          timestamp-url: 'http://timestamp.digicert.com'
+
+      - name: Sign packages with PFX (fallback)
+        if: steps.signing-method.outputs.use-keylocker == 'false'
+        uses: ks-no/github-actions-public/dotnet-sign-nuget-packages@main
+        with:
+          certificate-base64: ${{ secrets.CODE_SIGN_CERT_BASE64 }}
+          certificate-password: ${{ secrets.CODE_SIGN_PFX_PASS }}
+          package-path: 'packages/**/*.nupkg'
+
+      - name: Clean up KeyLocker credentials
+        if: always() && steps.signing-method.outputs.use-keylocker == 'true'
+        shell: pwsh
+        run: |
+          if ($env:SM_CLIENT_CERT_FILE -and (Test-Path $env:SM_CLIENT_CERT_FILE)) {
+            Remove-Item -Path $env:SM_CLIENT_CERT_FILE -Force -ErrorAction SilentlyContinue
+          }
+          Write-Output "KeyLocker temp cert cleanup completed"
+
+      - name: Upload Signed Packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages-signed
+          path: |
+            packages/**/*.nupkg
+            packages/**/*.snupkg
+          if-no-files-found: error
+
       - name: Push to Artifactory
         uses: ks-no/github-actions-public/dotnet-push-to-artifactory@main
         with:
           artifactory-username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory-password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+          package-path: 'packages/**/*.nupkg'
 
       - name: Set up GitHub App
         id: setup-github-app
@@ -236,18 +409,19 @@ jobs:
 
   push-nuget-org:
     name: Push to NuGet.org
-    needs: [initialize, build-linux, build-windows]
+    needs: [initialize, build-linux, build-windows, sign-packages]
     if: |
       !cancelled() &&
       needs.build-linux.result == 'success' &&
       (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
+      needs.sign-packages.result == 'success' &&
       (inputs.is-release == true || inputs.push-to-nuget-org == true) &&
       !startsWith(github.ref, 'refs/heads/dependabot/')
     runs-on: windows-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: nuget-packages
+          name: nuget-packages-signed
           path: packages
 
       - uses: actions/setup-dotnet@v4
@@ -261,12 +435,13 @@ jobs:
 
   release:
     name: Release
-    needs: [initialize, build-linux, build-windows, push-nuget-org]
+    needs: [initialize, build-linux, build-windows, push-nuget-org, sign-packages]
     if: |
       !cancelled() &&
       needs.build-linux.result == 'success' &&
       (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
       needs.push-nuget-org.result == 'success' &&
+      needs.sign-packages.result == 'success' &&
       inputs.is-release == true &&
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
@@ -287,7 +462,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: nuget-packages
+          name: nuget-packages-signed
           path: release-packages
 
       - uses: ks-no/github-actions-public/create-github-release@main

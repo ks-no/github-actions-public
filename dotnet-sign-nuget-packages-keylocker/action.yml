@@ -1,0 +1,61 @@
+name: 'Sign NuGet Packages with DigiCert KeyLocker'
+description: 'Sign NuGet packages using DigiCert KeyLocker via Windows Key Storage Provider (KSP)'
+
+inputs:
+  sm-certificate-fingerprint:
+    description: 'SHA1 fingerprint of the signing certificate in KeyLocker (SM_CODE_SIGNING_CERT_SHA1_HASH)'
+    required: true
+  package-root:
+    description: 'Root directory to search for .nupkg files'
+    required: false
+    default: '.'
+  timestamp-url:
+    description: 'Timestamp server URL'
+    required: false
+    default: 'http://timestamp.digicert.com'
+
+runs:
+  using: composite
+  steps:
+    - name: Sign NuGet Packages
+      shell: pwsh
+      env:
+        SM_CERT_FINGERPRINT: ${{ inputs.sm-certificate-fingerprint }}
+        TIMESTAMP_URL: ${{ inputs.timestamp-url }}
+        PACKAGE_ROOT: ${{ inputs.package-root }}
+      run: |
+        $smCertFingerprint = $env:SM_CERT_FINGERPRINT
+        $timestampUrl = $env:TIMESTAMP_URL
+        $packageRoot = $env:PACKAGE_ROOT
+        $failed = $false
+        
+        # Find all .nupkg and .snupkg files
+        $packages = @(Get-ChildItem -Path $packageRoot -Filter "*.nupkg" -Recurse -File) + 
+                    @(Get-ChildItem -Path $packageRoot -Filter "*.snupkg" -Recurse -File)
+        
+        if ($packages.Count -eq 0) {
+          Write-Error "No NuGet packages found in $packageRoot"
+          exit 1
+        }
+        
+        Write-Output "Found $($packages.Count) packages to sign"
+        
+        foreach ($package in $packages) {
+          Write-Output "Signing: $($package.FullName)"
+          
+          & dotnet nuget sign "$($package.FullName)" `
+            --certificate-fingerprint "$smCertFingerprint" `
+            --timestamper "$timestampUrl"
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to sign $($package.FullName)"
+            $failed = $true
+          }
+        }
+        
+        if ($failed) {
+          Write-Error "One or more packages failed to sign"
+          exit 1
+        }
+        
+        Write-Output "✓ All $($packages.Count) packages signed successfully"
