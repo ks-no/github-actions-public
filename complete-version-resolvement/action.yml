@@ -1,0 +1,79 @@
+name: 'Resolve Version'
+description: 'Resolves the version to use for a build, depending on whether it is a release or not. Extends resolve-version.'
+
+inputs:
+  version:
+    description: 'The explicit release version (e.g., 1.2.3). Mutually exclusive with semver_increment.'
+    required: false
+    default: ''
+  semver_increment:
+    description: 'The semver increment strategy ("next major", "next minor", "next patch"). Mutually exclusive with version.'
+    required: false
+    default: ''
+  is_release:
+    description: 'Whether this build is a release'
+    required: true
+    default: 'false'
+  snapshot_string:
+    description: 'The suffix to use for snapshot builds, like "SNAPSHOT" or "alpha"'
+    required: false
+    default: ''
+
+outputs:
+  resolved_version:
+    description: 'The resolved version to use for the release.'
+    value: ${{ steps.resolve.outputs.resolved_version }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Resolve version'
+      id: resolve
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        SEMVER_INCREMENT="${{ inputs.semver_increment }}"
+        IS_RELEASE="${{ inputs.is_release }}"
+        
+        if [ "$IS_RELEASE" = "false" ]; then
+          VERSION=$(git describe --tags --abbrev=8 2>/dev/null || echo "0.0.0-$(git rev-list --count HEAD)-g$(git rev-parse --short=8 HEAD)")
+        elif [[ -n "$SEMVER_INCREMENT" ]]; then
+          LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+          if [[ -z "$LATEST_TAG" ]]; then
+            echo "::error::No existing semver tag found to increment from."
+            exit 1
+          fi
+          MAJOR=$(echo "$LATEST_TAG" | cut -d. -f1)
+          MINOR=$(echo "$LATEST_TAG" | cut -d. -f2)
+          PATCH=$(echo "$LATEST_TAG" | cut -d. -f3)
+
+          if [[ "$SEMVER_INCREMENT" == "next patch" ]]; then
+            PATCH=$((PATCH + 1))
+          elif [[ "$SEMVER_INCREMENT" == "next minor" ]]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          elif [[ "$SEMVER_INCREMENT" == "next major" ]]; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          else
+            echo "::error::Unknown semver_increment value: '$SEMVER_INCREMENT'. Must be 'next patch', 'next minor', or 'next major'."
+            exit 1
+          fi
+          echo "resolved_version=${MAJOR}.${MINOR}.${PATCH}" >> $GITHUB_OUTPUT
+        elif [ -z "$VERSION" ]; then
+          echo "::error::Neither semver_increment or version have been set in a release build."
+          exit 1
+        fi
+        
+        echo "resolved_version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+        echo "## Bygg" >> "$GITHUB_STEP_SUMMARY"
+        echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+        echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+        echo "| Versjon | \`${VERSION}\` |" >> "$GITHUB_STEP_SUMMARY"
+        if [ "$IS_RELEASE" = "true" ]; then
+          echo "| Type | Release |" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "| Type | Snapshot |" >> "$GITHUB_STEP_SUMMARY"
+        fi
