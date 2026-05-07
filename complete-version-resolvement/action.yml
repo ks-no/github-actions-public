@@ -14,8 +14,8 @@ inputs:
     description: 'Whether this build is a release'
     required: true
     default: 'false'
-  snapshot_string: # Har ikke lagt til støtte for denne enda
-    description: 'The suffix to use for snapshot builds, like "SNAPSHOT" or "alpha"'
+  snapshot_string:
+    description: 'The suffix to use for snapshot builds, like "SNAPSHOT" or "alpha". If not set, it defaults to the number of commits since last tag, as output by "git describe".'
     required: false
     default: ''
 
@@ -34,9 +34,13 @@ runs:
         VERSION="${{ inputs.version }}"
         SEMVER_INCREMENT="${{ inputs.semver_increment }}"
         IS_RELEASE="${{ inputs.is_release }}"
+        SUFFIX="${{ inputs.snapshot_string }}"
         
         if [ "$IS_RELEASE" = "false" ]; then
           VERSION=$(git describe --tags --abbrev=8 2>/dev/null || echo "0.0.0-$(git rev-list --count HEAD)-g$(git rev-parse --short=8 HEAD)")
+          if [ -n "$SUFFIX" ]; then
+            VERSION=$(echo "$VERSION" | sed s/-[^-]*-/-${SUFFIX}-/)
+          fi
         elif [[ -n "$SEMVER_INCREMENT" ]]; then
           LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
           if [[ -z "$LATEST_TAG" ]]; then
