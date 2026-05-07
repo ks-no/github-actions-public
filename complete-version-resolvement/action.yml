@@ -14,7 +14,7 @@ inputs:
     description: 'Whether this build is a release'
     required: true
     default: 'false'
-  snapshot_string:
+  snapshot_string: # Har ikke lagt til støtte for denne enda
     description: 'The suffix to use for snapshot builds, like "SNAPSHOT" or "alpha"'
     required: false
     default: ''
