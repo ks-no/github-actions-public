@@ -19,6 +19,12 @@ inputs:
     required: false
     default: ''
 
+env:
+  VERSION: inputs.version
+  SEMVER_INCREMENT: inputs.semver_increment
+  IS_RELEASE: inputs.is_release
+  SUFFIX: inputs.snapshot_string
+
 outputs:
   resolved_version:
     description: 'The resolved version to use for the release.'
@@ -30,17 +36,13 @@ runs:
     - name: 'Resolve version'
       id: resolve
       shell: bash
-      run: |
-        VERSION="${{ inputs.version }}"
-        SEMVER_INCREMENT="${{ inputs.semver_increment }}"
-        IS_RELEASE="${{ inputs.is_release }}"
-        SUFFIX="${{ inputs.snapshot_string }}"
-        
+      run: |        
         if [ "$IS_RELEASE" = "false" ]; then
           VERSION=$(git describe --tags --abbrev=8 2>/dev/null || echo "0.0.0-$(git rev-list --count HEAD)-g$(git rev-parse --short=8 HEAD)")
           if [ -n "$SUFFIX" ]; then
             VERSION=$(echo "$VERSION" | sed s/-[^-]*-/-${SUFFIX}-/)
           fi
+        
         elif [[ -n "$SEMVER_INCREMENT" ]]; then
           LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
           if [[ -z "$LATEST_TAG" ]]; then
@@ -50,7 +52,6 @@ runs:
           MAJOR=$(echo "$LATEST_TAG" | cut -d. -f1)
           MINOR=$(echo "$LATEST_TAG" | cut -d. -f2)
           PATCH=$(echo "$LATEST_TAG" | cut -d. -f3)
-
           if [[ "$SEMVER_INCREMENT" == "next patch" ]]; then
             PATCH=$((PATCH + 1))
           elif [[ "$SEMVER_INCREMENT" == "next minor" ]]; then
@@ -64,7 +65,8 @@ runs:
             echo "::error::Unknown semver_increment value: '$SEMVER_INCREMENT'. Must be 'next patch', 'next minor', or 'next major'."
             exit 1
           fi
-          echo "resolved_version=${MAJOR}.${MINOR}.${PATCH}" >> $GITHUB_OUTPUT
+          echo "resolved_version=${MAJOR}.${MINOR}.${PATCH}" >> "$GITHUB_OUTPUT"
+        
         elif [ -z "$VERSION" ]; then
           echo "::error::Neither semver_increment or version have been set in a release build."
           exit 1
