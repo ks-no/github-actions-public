@@ -59,7 +59,7 @@ runs:
             echo "::error::Unknown semver_increment value: '$SEMVER_INCREMENT'. Must be 'next patch', 'next minor', or 'next major'."
             exit 1
           fi
-          echo "resolved_version=${MAJOR}.${MINOR}.${PATCH}" >> "$GITHUB_OUTPUT"
+          VERSION="${MAJOR}.${MINOR}.${PATCH}"
         
         elif [ -z "$VERSION" ]; then
           echo "::error::Neither semver_increment or version have been set in a release build."
