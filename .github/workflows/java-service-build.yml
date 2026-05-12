@@ -105,7 +105,6 @@ jobs:
         uses: ks-no/github-actions/build-java-and-test@main
         with:
           java_version: ${{ inputs.java_version }}
-          dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
           ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
@@ -163,6 +162,13 @@ jobs:
           git_tag: ${{ steps.build_java.outputs.git_tag }}
           helm_chart_url: ${{ steps.publish_helm.outputs.helm_chart_url }}
           helm_chart_prov_url: ${{ steps.publish_helm.outputs.helm_chart_prov_url }}
+
+      - name: 'SBOM Upload and Report'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: ks-no/github-actions-public/sbom-upload-and-report@main
+        with:
+          dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+          is_release: ${{ inputs.is_release }}
 
 #      - name: 'Security Output with Trivy'
 #        uses: ks-no/github-actions/security-output-generator@main

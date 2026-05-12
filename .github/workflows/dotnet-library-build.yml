@@ -161,6 +161,7 @@ jobs:
         uses: ks-no/github-actions-public/sbom-upload-and-report@main
         with:
           dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+          is_release: ${{ inputs.is-release }}
 
       - name: Sign Packages
         uses: ks-no/github-actions-public/dotnet-sign-nuget-packages@main

@@ -8,10 +8,18 @@ inputs:
   dependency_track_api_key:
     description: 'API key for Dependency-Track (must have PORTFOLIO_MANAGEMENT + TAG_MANAGEMENT permissions).'
     required: true
+  is_release:
+    description: 'Whether this is a release build. Used to derive project version when project_version is not explicitly set.'
+    required: false
+    default: 'false'
   project_name:
     description: 'Dependency-Track project name (typically github.event.repository.name).'
     required: false
     default: ${{ github.event.repository.name }}
+  project_version:
+    description: 'Optional explicit Dependency-Track project version override (e.g. main or prod).'
+    required: false
+    default: ''
   bom_file:
     description: >
       Path to the CycloneDX BOM file. Leave empty to auto-discover
@@ -27,12 +35,24 @@ runs:
       shell: bash
       env:
         DT_API_KEY: ${{ inputs.dependency_track_api_key }}
+        DT_IS_RELEASE: ${{ inputs.is_release }}
         DT_PROJECT_NAME: ${{ inputs.project_name }}
+        DT_PROJECT_VERSION: ${{ inputs.project_version }}
         DT_BOM_FILE: ${{ inputs.bom_file }}
         DT_BASE_URL: "https://dt.fiks.dev.ks.no"
         RUNNER_TEMP: ${{ runner.temp }}
       run: |
         set -uo pipefail
+
+        PROJECT_VERSION="$DT_PROJECT_VERSION"
+        if [[ -z "$PROJECT_VERSION" ]]; then
+          if [[ "$DT_IS_RELEASE" == "true" ]]; then
+            PROJECT_VERSION="prod"
+          else
+            PROJECT_VERSION="main"
+          fi
+        fi
+        echo "project_version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
 
         if [[ -z "$DT_API_KEY" ]]; then
           echo "::warning::dependency_track_api_key is empty — skipping SBOM upload and report"
@@ -60,6 +80,7 @@ runs:
         HTTP_CODE=$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
           -X POST -H "X-Api-Key: $DT_API_KEY" \
           -F "projectName=$DT_PROJECT_NAME" \
+          -F "projectVersion=$PROJECT_VERSION" \
           -F "autoCreate=true" \
           -F "bom=@$BOM_FILE" \
           "$DT_BASE_URL/api/v1/bom") || true
@@ -81,6 +102,7 @@ runs:
       with:
         dependency_track_api_key: ${{ inputs.dependency_track_api_key }}
         project_name: ${{ inputs.project_name }}
+        project_version: ${{ steps.sbom_upload.outputs.project_version }}
 
     - name: DT vulnerability summary
       if: inputs.dependency_track_api_key != ''
@@ -88,4 +110,5 @@ runs:
       with:
         dependency_track_api_key: ${{ inputs.dependency_track_api_key }}
         project_name: ${{ inputs.project_name }}
+        project_version: ${{ steps.sbom_upload.outputs.project_version }}
         bom_upload_token: ${{ steps.sbom_upload.outputs.bom_token }}
