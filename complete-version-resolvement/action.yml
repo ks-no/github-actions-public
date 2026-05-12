@@ -19,12 +19,6 @@ inputs:
     required: false
     default: ''
 
-env:
-  VERSION: inputs.version
-  SEMVER_INCREMENT: inputs.semver_increment
-  IS_RELEASE: inputs.is_release
-  SUFFIX: inputs.snapshot_string
-
 outputs:
   resolved_version:
     description: 'The resolved version to use for the release.'
@@ -83,3 +77,8 @@ runs:
         else
           echo "| Type | Snapshot |" >> "$GITHUB_STEP_SUMMARY"
         fi
+      env:
+        VERSION: inputs.version
+        SEMVER_INCREMENT: inputs.semver_increment
+        IS_RELEASE: inputs.is_release
+        SUFFIX: inputs.snapshot_string
