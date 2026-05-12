@@ -108,7 +108,7 @@ jobs:
           dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
-          ks_github_app_token: ${{ steps.app_token.outputs.app_token }}wir
+          ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
           is_release: ${{ inputs.is_release }}
           version: ${{ inputs.version }}
 

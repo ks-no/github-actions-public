@@ -139,14 +139,12 @@ jobs:
         run: |
           jfrog mvn -DinstallAtEnd=true -U -B clean org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom install
 
-      - name: Upload SBOM to Dependency-Track
+      - name: SBOM Upload and Report
         if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && inputs.is_release == true
-        run: |
-          curl -X POST --header "X-Api-Key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}" \
-            -F "projectName=${{ github.event.repository.name }}" \
-            -F "autoCreate=true" \
-            -F "bom=@target/bom.xml" \
-            https://dt.fiks.dev.ks.no/api/v1/bom
+        uses: ks-no/github-actions-public/sbom-upload-and-report@main
+        with:
+          dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+          project_name: ${{ github.event.repository.name }}
 
       - name: Release - Set next snapshot version
         if: inputs.is_release == true && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
