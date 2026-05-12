@@ -127,11 +127,12 @@ runs:
         mvn org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -Dcyclonedx.outputFormat=json -Dcyclonedx.outputName=bom -Dcyclonedx.skipNotDeployed=false
 
     - name: SBOM Upload and Report
-      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && inputs.is_release == 'true'
+      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && inputs.dependency_track_api_key != ''
       uses: ks-no/github-actions-public/sbom-upload-and-report@main
       with:
         dependency_track_api_key: ${{ inputs.dependency_track_api_key }}
         project_name: ${{ github.event.repository.name }}
+        is_release: ${{ inputs.is_release }}
     - name: Deploy to Maven Central
       if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
       shell: bash

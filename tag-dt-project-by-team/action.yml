@@ -11,6 +11,10 @@ inputs:
   project_name:
     description: 'Dependency-Track project name (typically github.event.repository.name).'
     required: true
+  project_version:
+    description: 'Dependency-Track project version (environment marker, e.g. main or prod).'
+    required: false
+    default: 'main'
 
 runs:
   using: "composite"
@@ -20,6 +24,7 @@ runs:
       env:
         DT_API_KEY: ${{ inputs.dependency_track_api_key }}
         DT_PROJECT_NAME: ${{ inputs.project_name }}
+        DT_PROJECT_VERSION: ${{ inputs.project_version }}
         DT_BASE_URL: "https://dt.fiks.dev.ks.no"
       run: |
         set -uo pipefail
@@ -100,14 +105,15 @@ runs:
 
         BASE_URL="${DT_BASE_URL%/}"
 
-        # URL-encode the project name
+        # URL-encode project name and version
         ENCODED_NAME=$(jq -rn --arg v "$DT_PROJECT_NAME" '$v | @uri')
+        ENCODED_VERSION=$(jq -rn --arg v "$DT_PROJECT_VERSION" '$v | @uri')
 
         PROJECT_UUID=""
         for attempt in 1 2 3; do
           PROJECT_JSON=$(curl -fsS \
             -H "X-Api-Key: $DT_API_KEY" \
-            "$BASE_URL/api/v1/project/lookup?name=$ENCODED_NAME" 2>/dev/null) || true
+            "$BASE_URL/api/v1/project/lookup?name=$ENCODED_NAME&version=$ENCODED_VERSION" 2>/dev/null) || true
 
           PROJECT_UUID=$(echo "$PROJECT_JSON" | jq -r '.uuid // empty' 2>/dev/null || true)
 
@@ -122,7 +128,7 @@ runs:
         done
 
         if [[ -z "$PROJECT_UUID" ]]; then
-          warn_and_exit "Could not find DT project '$DT_PROJECT_NAME' after 3 attempts."
+          warn_and_exit "Could not find DT project '$DT_PROJECT_NAME' version '$DT_PROJECT_VERSION' after 3 attempts."
         fi
 
         # Validate UUID format
