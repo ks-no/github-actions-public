@@ -137,7 +137,7 @@ runs:
         UPLOAD_LOG="$RUNNER_TEMP/artifactory_upload.log"
         UPLOAD_RC=0
         jfrog rt upload "$BOM_FILE" "$ARTIFACTORY_PATH" \
-          --props "commit=${GITHUB_SHA:0:7},ref=${GITHUB_REF#refs/*/},run=${GITHUB_RUN_NUMBER}" \
+          --props "commit=${GITHUB_SHA:0:7};ref=${GITHUB_REF#refs/*/};run=${GITHUB_RUN_NUMBER}" \
           > "$UPLOAD_LOG" 2>&1 || UPLOAD_RC=$?
         cat "$UPLOAD_LOG"
 
