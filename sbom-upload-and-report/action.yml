@@ -1,13 +1,14 @@
 name: 'SBOM Upload and Report'
 description: >
-  Uploads a CycloneDX SBOM to Dependency-Track, tags the project with the
-  owning team from CODEOWNERS, and posts a vulnerability summary to the
-  GitHub Actions Job Summary. Fails softly — never blocks the pipeline.
+  Uploads a CycloneDX SBOM to Dependency-Track, stores in Artifactory for retention,
+  tags the project with the owning team from CODEOWNERS, and posts a vulnerability summary
+  to the GitHub Actions Job Summary. Fails softly — never blocks the pipeline.
 
 inputs:
   dependency_track_api_key:
-    description: 'API key for Dependency-Track (must have PORTFOLIO_MANAGEMENT + TAG_MANAGEMENT permissions).'
-    required: true
+    description: 'API key for Dependency-Track (must have PORTFOLIO_MANAGEMENT + TAG_MANAGEMENT permissions). If empty, DT upload is skipped.'
+    required: false
+    default: ''
   is_release:
     description: 'Whether this is a release build. Used to derive project version when project_version is not explicitly set.'
     required: false
@@ -26,23 +27,147 @@ inputs:
       (searches target/bom.xml, target/bom.json, bom.xml, bom.json).
     required: false
     default: ''
+  store_in_artifactory:
+    description: 'Set to true to store SBOM in Artifactory. Requires JFrog CLI on PATH (via setup-jfrog-cli or prepare-the-frog).'
+    required: false
+    default: 'false'
+  artifactory_repository_name:
+    description: 'Repository name for Artifactory path (default: github.event.repository.name).'
+    required: false
+    default: ${{ github.event.repository.name }}
+  artifactory_artifact_version:
+    description: 'Version string for Artifactory BOM path (e.g., 1.2.3). Required for is_release=true.'
+    required: false
+    default: ''
+
+outputs:
+  artifactory_bom_url:
+    description: 'URL to the BOM in Artifactory (if uploaded).'
+    value: ${{ steps.artifactory_upload.outputs.bom_url }}
+  artifactory_bom_sha256:
+    description: 'SHA256 hash of the BOM file (if uploaded).'
+    value: ${{ steps.artifactory_upload.outputs.bom_sha256 }}
 
 runs:
   using: "composite"
   steps:
+    - name: Auto-discover BOM file
+      id: bom_discovery
+      shell: bash
+      env:
+        BOM_FILE_INPUT: ${{ inputs.bom_file }}
+      run: |
+        set -euo pipefail
+        BOM_FILE="$BOM_FILE_INPUT"
+        if [[ -z "$BOM_FILE" ]]; then
+          for candidate in target/bom.xml target/bom.json bom.xml bom.json; do
+            if [[ -f "$candidate" ]]; then
+              BOM_FILE="$candidate"
+              break
+            fi
+          done
+        fi
+        
+        if [[ -z "$BOM_FILE" || ! -f "$BOM_FILE" ]]; then
+          echo "bom_found=false" >> $GITHUB_OUTPUT
+        else
+          echo "bom_found=true" >> $GITHUB_OUTPUT
+          echo "bom_file=$BOM_FILE" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Store SBOM in Artifactory
+      id: artifactory_upload
+      if: inputs.store_in_artifactory == 'true' && steps.bom_discovery.outputs.bom_found == 'true'
+      shell: bash
+      env:
+        ARTIFACTORY_REPO_NAME: ${{ inputs.artifactory_repository_name }}
+        ARTIFACTORY_ARTIFACT_VERSION: ${{ inputs.artifactory_artifact_version }}
+        IS_RELEASE: ${{ inputs.is_release }}
+        BOM_FILE: ${{ steps.bom_discovery.outputs.bom_file }}
+        RUNNER_TEMP: ${{ runner.temp }}
+      run: |
+        set -euo pipefail
+
+        # Require JFrog CLI on PATH (provided by setup-jfrog-cli or prepare-the-frog)
+        if ! command -v jfrog &> /dev/null; then
+          if [[ "$IS_RELEASE" == "true" ]]; then
+            echo "::warning::JFrog CLI not found — release build not archived to Artifactory. Add setup-jfrog-cli step before sbom-upload-and-report."
+          fi
+          exit 0
+        fi
+
+        if [[ -z "$ARTIFACTORY_ARTIFACT_VERSION" ]]; then
+          if [[ "$IS_RELEASE" == "true" ]]; then
+            echo "::warning::artifactory_artifact_version not specified for release build — Artifactory storage skipped"
+          fi
+          exit 0
+        fi
+
+        # Validate BOM format (JSON or XML)
+        if [[ "$BOM_FILE" == *.json ]]; then
+          if ! jq empty "$BOM_FILE" 2>/dev/null; then
+            if [[ "$IS_RELEASE" == "true" ]]; then
+              echo "::warning::BOM JSON file is not valid — release build not archived to Artifactory"
+            fi
+            exit 0
+          fi
+        elif [[ "$BOM_FILE" == *.xml ]]; then
+          if ! head -1 "$BOM_FILE" | grep -q '<'; then
+            if [[ "$IS_RELEASE" == "true" ]]; then
+              echo "::warning::BOM XML file appears invalid — release build not archived to Artifactory"
+            fi
+            exit 0
+          fi
+        fi
+
+        # Compute SHA256
+        BOM_SHA256=$(sha256sum "$BOM_FILE" | awk '{print $1}')
+
+        # Determine environment
+        ENVIRONMENT="main"
+        if [[ "$IS_RELEASE" == "true" ]]; then
+          ENVIRONMENT="prod"
+        fi
+
+        # Determine file extension for Artifactory path
+        BOM_EXT="${BOM_FILE##*.}"
+        ARTIFACTORY_PATH="sbom-${ENVIRONMENT}/${ARTIFACTORY_REPO_NAME}/${ARTIFACTORY_ARTIFACT_VERSION}/bom.${BOM_EXT}"
+
+        # Upload — capture exit code separately to avoid pipefail masking
+        UPLOAD_LOG="$RUNNER_TEMP/artifactory_upload.log"
+        UPLOAD_RC=0
+        jfrog rt upload "$BOM_FILE" "$ARTIFACTORY_PATH" \
+          --props "commit=${GITHUB_SHA:0:7},ref=${GITHUB_REF#refs/*/},run=${GITHUB_RUN_NUMBER}" \
+          > "$UPLOAD_LOG" 2>&1 || UPLOAD_RC=$?
+        cat "$UPLOAD_LOG"
+
+        if [[ "$UPLOAD_RC" -eq 0 ]]; then
+          BOM_URL="https://artifactory.fiks.ks.no/artifactory/${ARTIFACTORY_PATH}"
+          echo "bom_url=$BOM_URL" >> $GITHUB_OUTPUT
+          echo "bom_sha256=$BOM_SHA256" >> $GITHUB_OUTPUT
+          echo "SBOM archived to Artifactory: $BOM_URL"
+        else
+          if [[ "$IS_RELEASE" == "true" ]]; then
+            echo "::warning::Failed to upload BOM to Artifactory (exit code $UPLOAD_RC) — release build not archived, but continuing pipeline"
+          fi
+        fi
+        rm -f "$UPLOAD_LOG"
+
     - name: Upload SBOM to Dependency-Track
       id: sbom_upload
+      if: inputs.dependency_track_api_key != ''
       shell: bash
       env:
         DT_API_KEY: ${{ inputs.dependency_track_api_key }}
         DT_IS_RELEASE: ${{ inputs.is_release }}
         DT_PROJECT_NAME: ${{ inputs.project_name }}
         DT_PROJECT_VERSION: ${{ inputs.project_version }}
-        DT_BOM_FILE: ${{ inputs.bom_file }}
+        BOM_FILE: ${{ steps.bom_discovery.outputs.bom_file }}
+        BOM_FOUND: ${{ steps.bom_discovery.outputs.bom_found }}
         DT_BASE_URL: "https://dt.fiks.dev.ks.no"
         RUNNER_TEMP: ${{ runner.temp }}
       run: |
-        set -uo pipefail
+        set -euo pipefail
 
         PROJECT_VERSION="$DT_PROJECT_VERSION"
         if [[ -z "$PROJECT_VERSION" ]]; then
@@ -54,24 +179,9 @@ runs:
         fi
         echo "project_version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
 
-        if [[ -z "$DT_API_KEY" ]]; then
-          echo "::warning::dependency_track_api_key is empty — skipping SBOM upload and report"
-          exit 0
-        fi
-
-        BOM_FILE="$DT_BOM_FILE"
-        if [[ -z "$BOM_FILE" ]]; then
-          for candidate in target/bom.xml target/bom.json bom.xml bom.json; do
-            if [[ -f "$candidate" ]]; then
-              BOM_FILE="$candidate"
-              echo "Auto-discovered BOM file: $BOM_FILE"
-              break
-            fi
-          done
-        fi
-
-        if [[ -z "$BOM_FILE" || ! -f "$BOM_FILE" ]]; then
-          echo "::warning::No BOM file found — skipping SBOM upload"
+        # Skip BOM upload if not found, but still set project_version for downstream steps
+        if [[ "$BOM_FOUND" != "true" ]]; then
+          echo "::warning::No BOM file found — skipping SBOM upload to Dependency-Track"
           exit 0
         fi
 
