@@ -27,10 +27,6 @@ inputs:
       (searches target/bom.xml, target/bom.json, bom.xml, bom.json).
     required: false
     default: ''
-  store_in_artifactory:
-    description: 'Set to true to store SBOM in Artifactory. Requires JFrog CLI on PATH (via setup-jfrog-cli or prepare-the-frog).'
-    required: false
-    default: 'false'
   artifactory_repository_name:
     description: 'Repository name for Artifactory path (default: github.event.repository.name).'
     required: false
@@ -77,7 +73,7 @@ runs:
 
     - name: Store SBOM in Artifactory
       id: artifactory_upload
-      if: inputs.store_in_artifactory == 'true' && steps.bom_discovery.outputs.bom_found == 'true'
+      if: inputs.artifactory_artifact_version != '' && steps.bom_discovery.outputs.bom_found == 'true'
       shell: bash
       env:
         ARTIFACTORY_REPO_NAME: ${{ inputs.artifactory_repository_name }}
@@ -92,13 +88,6 @@ runs:
         if ! command -v jfrog &> /dev/null; then
           if [[ "$IS_RELEASE" == "true" ]]; then
             echo "::warning::JFrog CLI not found — release build not archived to Artifactory. Add setup-jfrog-cli step before sbom-upload-and-report."
-          fi
-          exit 0
-        fi
-
-        if [[ -z "$ARTIFACTORY_ARTIFACT_VERSION" ]]; then
-          if [[ "$IS_RELEASE" == "true" ]]; then
-            echo "::warning::artifactory_artifact_version not specified for release build — Artifactory storage skipped"
           fi
           exit 0
         fi

@@ -138,6 +138,13 @@ jobs:
           JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
         run: |
           jfrog mvn -DinstallAtEnd=true -U -B clean org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom install
+
+      - name: Read built version from POM
+        id: pom_version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Release - Set next snapshot version
         if: inputs.is_release == true && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         run: |
@@ -195,11 +202,13 @@ jobs:
         with:
           dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
           is_release: ${{ inputs.is_release }}
+          artifactory_repository_name: ${{ github.event.repository.name }}
+          artifactory_artifact_version: ${{ inputs.version || steps.pom_version.outputs.version }}
 
 
       - name: read current version for use in component tests
+        id: pom_version_for_tests
         if: inputs.component_test_project != ''
-        id: pom_version
         run: |
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -214,7 +223,7 @@ jobs:
             const intOwner = 'ks-no';
             const intRepo = '${{ inputs.component_test_project }}';
             const workflowId = 'component-test.yml';
-            const componentVersion = '${{ inputs.component_test_version }}' || '${{ steps.pom_version.outputs.version }}';
+            const componentVersion = '${{ inputs.component_test_version }}' || '${{ steps.pom_version_for_tests.outputs.version }}';
             const clientOwner = context.repo.owner;
             const clientRepo  = context.repo.repo;
             const clientSha   = context.sha;

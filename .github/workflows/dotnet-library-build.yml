@@ -156,12 +156,21 @@ jobs:
           path: bom.json
           if-no-files-found: ignore
 
+      - name: Setup JFrog CLI
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: ks-no/github-actions-public/setup-jfrog-cli@main
+        with:
+          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+
       - name: SBOM Upload and Report
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         uses: ks-no/github-actions-public/sbom-upload-and-report@main
         with:
           dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
           is_release: ${{ inputs.is-release }}
+          artifactory_repository_name: ${{ github.event.repository.name }}
+          artifactory_artifact_version: ${{ needs.initialize.outputs.full-version }}
 
       - name: Sign Packages
         uses: ks-no/github-actions-public/dotnet-sign-nuget-packages@main
