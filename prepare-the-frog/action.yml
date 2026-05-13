@@ -1,5 +1,5 @@
-name: 'Prepare JFrog CLI'
-description: 'Sets up JFrog CLI and configures it with Artifactory.'
+name: 'Prepare JFrog CLI for Maven'
+description: 'Sets up JFrog CLI, configures it with Artifactory, and adds Maven repository configuration.'
 
 inputs:
   artifactory_username:
@@ -13,17 +13,10 @@ runs:
   using: "composite"
   steps:
     - name: Setup JFrog CLI
-      uses: jfrog/setup-jfrog-cli@86dacb6974c66cc99e7651e1205f6581aaddba9a #v4.10.0
+      uses: ks-no/github-actions-public/setup-jfrog-cli@main
       with:
-        version: latest
-
-    - name: Configure JFrog CLI with Artifactory
-      shell: bash
-      env:
-        ARTIFACTORY_USERNAME: ${{ inputs.artifactory_username }}
-        ARTIFACTORY_PASSWORD: ${{ inputs.artifactory_password }}
-      run: |
-        jfrog config add artifactory --url="https://artifactory.fiks.ks.no" --user="$ARTIFACTORY_USERNAME" --password="$ARTIFACTORY_PASSWORD" --interactive=false --overwrite
+        artifactory_username: ${{ inputs.artifactory_username }}
+        artifactory_password: ${{ inputs.artifactory_password }}
 
     - name: Configure JFrog Maven
       shell: bash
