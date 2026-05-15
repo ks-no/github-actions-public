@@ -23,13 +23,6 @@ runs:
         artifactory_password: ${{ inputs.artifactory_password }}
 
     - name: Configure JFrog Maven
-      if: inputs.is_release != 'true'
       shell: bash
       run: |
         jfrog mvn-config --repo-deploy-releases maven-local-staging --repo-deploy-snapshots maven-local-staging --repo-resolve-releases maven-all --repo-resolve-snapshots maven-all
-
-    - name: Configure JFrog Maven for Release
-      if: inputs.is_release == 'true'
-      shell: bash
-      run: |
-        jfrog mvn-config --repo-deploy-releases ks-maven --repo-deploy-snapshots ks-maven --repo-resolve-releases ks-maven --repo-resolve-snapshots ks-maven
