@@ -25,9 +25,6 @@ inputs:
   ks_github_app_private_key:
     description: 'GitHub App Private Key for authentication.'
     required: true
-  dependency_track_api_key:
-    description: 'The API key for Dependency-Track.'
-    required: true
   gpg_private_key:
     description: 'GPG private keys for signing artifacts.'
     required: true
@@ -126,29 +123,6 @@ runs:
       run: |
         mvn org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -Dcyclonedx.outputFormat=json -Dcyclonedx.outputName=bom -Dcyclonedx.skipNotDeployed=false
 
-    - name: Upload SBOM to Dependency-Track
-      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && inputs.is_release == 'true'
-      shell: bash
-      run: |
-        echo "Searching for SBOM files..."
-        find . -name "bom.json" -o -name "*bom*.json" | head -20
-        
-        # Try to find the bom.json file
-        BOM_FILE=$(find . -name "bom.json" -type f | head -1)
-        
-        if [ -z "$BOM_FILE" ]; then
-          echo "Error: No bom.json file found in the project!"
-          echo "Listing all target directories:"
-          find . -type d -name "target" -exec ls -la {} \; | head -50
-          exit 1
-        fi
-        
-        echo "Found SBOM file at: $BOM_FILE"
-        curl -X POST --header "X-Api-Key: ${{ inputs.dependency_track_api_key }}" \
-          -F "projectName=${{ github.event.repository.name }}" \
-          -F "autoCreate=true" \
-          -F "bom=@$BOM_FILE" \
-          https://dt.fiks.dev.ks.no/api/v1/bom
     - name: Deploy to Maven Central
       if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
       shell: bash

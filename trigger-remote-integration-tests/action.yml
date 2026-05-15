@@ -1,0 +1,129 @@
+name: Trigger Remote Integration Tests
+description: |
+  Triggers an integration test workflow in a remote repo, creates a check run on the calling repo,
+  and optionally waits for the tests to complete.
+
+inputs:
+  app-token:
+    description: 'GitHub App token with permissions to dispatch workflows and create check runs'
+    required: true
+  integration-test-repo:
+    description: 'Integration test repo name under ks-no (e.g., fiks-io-client-dotnet-integration-tests)'
+    required: true
+  integration-test-workflow:
+    description: 'Workflow file to dispatch in the integration test repo'
+    required: true
+  component-version:
+    description: 'Version of the component being tested'
+    required: true
+  component-package-name:
+    description: 'NuGet package name of the component being tested'
+    required: true
+  wait-for-completion:
+    description: 'Block until integration tests complete (true/false)'
+    required: false
+    default: 'false'
+  poll-interval-seconds:
+    description: 'Seconds between polling attempts'
+    required: false
+    default: '30'
+  max-wait-minutes:
+    description: 'Maximum minutes to wait for completion'
+    required: false
+    default: '50'
+
+outputs:
+  check-run-id:
+    description: 'ID of the created check run'
+    value: ${{ steps.trigger.outputs.check-run-id }}
+  conclusion:
+    description: 'Conclusion of the integration tests (success, failure, etc.). Only set if wait-for-completion is true.'
+    value: ${{ steps.wait.outputs.conclusion }}
+
+runs:
+  using: composite
+  steps:
+    - name: Trigger Integration Tests
+      id: trigger
+      uses: actions/github-script@v8
+      env:
+        INT_REPO: ${{ inputs.integration-test-repo }}
+        INT_WORKFLOW: ${{ inputs.integration-test-workflow }}
+        COMPONENT_VERSION: ${{ inputs.component-version }}
+        COMPONENT_PACKAGE_NAME: ${{ inputs.component-package-name }}
+      with:
+        github-token: ${{ inputs.app-token }}
+        script: |
+          const intOwner = 'ks-no';
+          const intRepo = process.env.INT_REPO;
+          const workflowId = process.env.INT_WORKFLOW;
+          const componentVersion = process.env.COMPONENT_VERSION;
+          const componentPackageName = process.env.COMPONENT_PACKAGE_NAME;
+          const clientOwner = context.repo.owner;
+          const clientRepo  = context.repo.repo;
+          const clientSha   = context.sha;
+
+          const { data: checkRun } = await github.rest.checks.create({
+            owner: clientOwner,
+            repo:  clientRepo,
+            name:  'Integration Tests',
+            head_sha:   clientSha,
+            status:     'in_progress',
+            started_at: new Date().toISOString(),
+            output: {
+              title:   'Integration Tests',
+              summary: `Running integration tests with version ${componentVersion}`
+            }
+          });
+          await github.rest.actions.createWorkflowDispatch({
+            owner: intOwner,
+            repo:  intRepo,
+            workflow_id: workflowId,
+            ref: 'main',
+            inputs: {
+              componentVersion,
+              componentPackageName,
+              clientOwner,
+              clientRepo,
+              clientSha,
+              checkRunId: String(checkRun.id)
+            }
+          });
+          console.log(`Integration tests triggered in ${intRepo} (check run #${checkRun.id})`);
+          core.setOutput('check-run-id', String(checkRun.id));
+
+    - name: Wait for Integration Tests
+      id: wait
+      if: inputs.wait-for-completion == 'true'
+      uses: actions/github-script@v8
+      env:
+        CHECK_RUN_ID: ${{ steps.trigger.outputs.check-run-id }}
+        POLL_INTERVAL_SECONDS: ${{ inputs.poll-interval-seconds }}
+        MAX_WAIT_MINUTES: ${{ inputs.max-wait-minutes }}
+      with:
+        github-token: ${{ inputs.app-token }}
+        script: |
+          const clientOwner = context.repo.owner;
+          const clientRepo  = context.repo.repo;
+          const checkRunId  = Number(process.env.CHECK_RUN_ID);
+          const pollIntervalMs = Number(process.env.POLL_INTERVAL_SECONDS) * 1000;
+          const maxAttempts = Math.ceil(Number(process.env.MAX_WAIT_MINUTES) * 60000 / pollIntervalMs);
+          let attempts = 0;
+          let conclusion = null;
+          while (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+            const { data: updated } = await github.rest.checks.get({
+              owner: clientOwner,
+              repo:  clientRepo,
+              check_run_id: checkRunId
+            });
+            console.log(`[${++attempts}] status: ${updated.status}, conclusion: ${updated.conclusion}`);
+            if (updated.status === 'completed') {
+              conclusion = updated.conclusion;
+              break;
+            }
+          }
+          core.setOutput('conclusion', conclusion || 'timed_out');
+          if (conclusion !== 'success') {
+            core.setFailed(`Integration tests did not pass (conclusion: ${conclusion || 'timed_out'})`);
+          }

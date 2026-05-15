@@ -1,0 +1,87 @@
+---
+name: 'Publish Docker Image without Jib'
+description: 'Build and push Docker image to Artifactory using JFrog CLI'
+
+inputs:
+  is_release:
+    description: 'true for release, false for snapshot'
+    required: true
+  image_name:
+    description: 'Name of the Docker image'
+    required: true
+  dockerfile:
+    description: 'Dockerfile to use'
+    required: true
+    default: 'Dockerfile'
+  build_name:
+    description: 'JFrog build name'
+    required: true
+  tags:
+    description: 'Comma-separated list of tags for the Docker image'
+    required: true
+  artifactory_username:
+    description: 'Artifactory username'
+    required: true
+  artifactory_password:
+    description: 'Artifactory password'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout
+      uses: ks-no/github-actions-public/checkout@main
+
+    - name: Setup JFrog CLI
+      uses: jfrog/setup-jfrog-cli@86dacb6974c66cc99e7651e1205f6581aaddba9a #v4.10.0
+      with:
+        version: latest
+
+    - name: Configure JFrog CLI with Artifactory
+      shell: bash
+      env:
+        ARTIFACTORY_USERNAME: ${{ inputs.artifactory_username }}
+        ARTIFACTORY_PASSWORD: ${{ inputs.artifactory_password }}
+      run: |
+        jfrog config add artifactory \
+          --url="https://artifactory.fiks.ks.no" \
+          --user="$ARTIFACTORY_USERNAME" \
+          --password="$ARTIFACTORY_PASSWORD" \
+          --interactive=false \
+          --overwrite
+
+    - name: Set Docker repository
+      id: set_repo
+      shell: bash
+      run: |
+        if [[ "${{ inputs.is_release }}" == "true" ]]; then
+          echo "repo=docker-local.artifactory.fiks.ks.no" >> $GITHUB_OUTPUT
+        else
+          echo "repo=docker-local-snapshots.artifactory.fiks.ks.no" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Build Docker image
+      id: build_image
+      shell: bash
+      run: |
+        docker build -t ${{ inputs.image_name }} -f ${{ inputs.dockerfile }} . --no-cache
+
+    - name: Tag and Push Docker image
+      shell: bash
+      run: |
+        REPO_URL="${{ steps.set_repo.outputs.repo }}"
+        IFS=',' read -ra TAGS <<< "${{ inputs.tags }}"
+        for tag in "${TAGS[@]}"; do
+          # Trim whitespace from tag
+          tag=$(echo "$tag" | xargs)
+          if [ -n "$tag" ]; then
+            echo "Tagging and pushing ${{ inputs.image_name }} as $REPO_URL/${{ inputs.image_name }}:$tag"
+            docker tag "${{ inputs.image_name }}" "$REPO_URL/${{ inputs.image_name }}:$tag"
+            jfrog docker push "$REPO_URL/${{ inputs.image_name }}:$tag"
+          fi
+        done
+
+    - name: Publish build info
+      shell: bash
+      run: |
+        jfrog rt build-publish "$BUILD_NAME" "$GITHUB_RUN_NUMBER"

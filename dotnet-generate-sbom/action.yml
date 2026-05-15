@@ -10,6 +10,7 @@ inputs:
     required: false
     default: '.'
 
+# "--spec-version 1.5" Må endres til nyeste versjon når den er tilgjengelig i DT
 runs:
   using: composite
   steps:
@@ -24,6 +25,7 @@ runs:
             "$SLNFILE" \
             --output ${{ inputs.output-path }} \
             --set-version ${{ inputs.version }} \
+            --spec-version 1.5 \
             --json
         else
           echo "No solution file found, skipping SBOM generation"
