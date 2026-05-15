@@ -8,6 +8,10 @@ inputs:
   artifactory_password:
     description: 'The password for Artifactory'
     required: true
+  is_release:
+    description: 'Indicates if the build is a release build (true/false)'
+    required: false
+    default: false
 
 runs:
   using: "composite"
@@ -26,6 +30,13 @@ runs:
         jfrog config add artifactory --url="https://artifactory.fiks.ks.no" --user="$ARTIFACTORY_USERNAME" --password="$ARTIFACTORY_PASSWORD" --interactive=false --overwrite
 
     - name: Configure JFrog Maven
+      if: inputs.is_release != true
       shell: bash
       run: |
         jfrog mvn-config --repo-deploy-releases maven-local-staging --repo-deploy-snapshots maven-local-staging --repo-resolve-releases maven-all --repo-resolve-snapshots maven-all
+
+    - name: Configure JFrog Maven for Release
+      if: inputs.is_release == true
+      shell: bash
+      run: |
+        jfrog mvn-config --repo-deploy-releases ks-maven --repo-deploy-snapshots ks-maven --repo-resolve-releases ks-maven --repo-resolve-snapshots ks-maven
