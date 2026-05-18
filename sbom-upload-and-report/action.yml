@@ -35,6 +35,14 @@ inputs:
     description: 'Version string for Artifactory BOM path (e.g., 1.2.3). Required for is_release=true.'
     required: false
     default: ''
+  artifactory_fetch_version:
+    description: 'Version to fetch BOM from Artifactory (used at deploy time when no local BOM exists). If empty, no remote fetch is attempted.'
+    required: false
+    default: ''
+  defer_dependency_track:
+    description: 'Skip DT upload (deferred to deploy phase). BOM is still stored in Artifactory.'
+    required: false
+    default: 'false'
 
 outputs:
   artifactory_bom_url:
@@ -52,10 +60,36 @@ runs:
       shell: bash
       env:
         BOM_FILE_INPUT: ${{ inputs.bom_file }}
+        ARTIFACTORY_FETCH_VERSION: ${{ inputs.artifactory_fetch_version }}
+        ARTIFACTORY_REPO_NAME: ${{ inputs.artifactory_repository_name }}
+        RUNNER_TEMP: ${{ runner.temp }}
       run: |
         set -euo pipefail
-        BOM_FILE="$BOM_FILE_INPUT"
-        if [[ -z "$BOM_FILE" ]]; then
+        BOM_FILE=""
+
+        # Explicit bom_file input takes precedence
+        if [[ -n "$BOM_FILE_INPUT" && -f "$BOM_FILE_INPUT" ]]; then
+          BOM_FILE="$BOM_FILE_INPUT"
+        elif [[ -n "$ARTIFACTORY_FETCH_VERSION" ]]; then
+          # Fetch from Artifactory (deploy-time path)
+          if command -v jfrog &> /dev/null; then
+            for REPO_PREFIX in "sbom-prod" "sbom-main"; do
+              for FORMAT in "json" "xml"; do
+                REMOTE_PATH="${REPO_PREFIX}/${ARTIFACTORY_REPO_NAME}/${ARTIFACTORY_FETCH_VERSION}/bom.${FORMAT}"
+                LOCAL_PATH="${RUNNER_TEMP}/bom.${FORMAT}"
+                echo "Attempting to fetch from ${REMOTE_PATH}..."
+                if jfrog rt download "${REMOTE_PATH}" "${LOCAL_PATH}" --flat --fail-no-op; then
+                  BOM_FILE="${LOCAL_PATH}"
+                  echo "✓ Found SBOM: ${REMOTE_PATH}"
+                  break 2
+                fi
+              done
+            done
+          else
+            echo "::warning::JFrog CLI not found — cannot fetch SBOM from Artifactory"
+          fi
+        else
+          # Local discovery
           for candidate in target/bom.xml target/bom.json bom.xml bom.json; do
             if [[ -f "$candidate" ]]; then
               BOM_FILE="$candidate"
@@ -143,7 +177,7 @@ runs:
 
     - name: Upload SBOM to Dependency-Track
       id: sbom_upload
-      if: inputs.dependency_track_api_key != ''
+      if: inputs.dependency_track_api_key != '' && inputs.defer_dependency_track != 'true'
       shell: bash
       env:
         DT_API_KEY: ${{ inputs.dependency_track_api_key }}
@@ -195,7 +229,7 @@ runs:
         rm -f "$RESPONSE_FILE"
 
     - name: Tag DT project with owning team
-      if: inputs.dependency_track_api_key != ''
+      if: inputs.dependency_track_api_key != '' && inputs.defer_dependency_track != 'true'
       uses: ks-no/github-actions-public/tag-dt-project-by-team@main
       with:
         dependency_track_api_key: ${{ inputs.dependency_track_api_key }}
@@ -203,7 +237,7 @@ runs:
         project_version: ${{ steps.sbom_upload.outputs.project_version }}
 
     - name: DT vulnerability summary
-      if: inputs.dependency_track_api_key != ''
+      if: inputs.dependency_track_api_key != '' && inputs.defer_dependency_track != 'true'
       uses: ks-no/github-actions-public/dt-vulnerability-summary@main
       with:
         dependency_track_api_key: ${{ inputs.dependency_track_api_key }}

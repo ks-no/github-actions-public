@@ -145,6 +145,9 @@ jobs:
           version: ${{ steps.build_java.outputs.git_tag }}
           ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
           ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+          dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
 
       - name: 'Publish, Release and Create Next Snapshot'
         if: inputs.is_release == true
@@ -169,6 +172,7 @@ jobs:
         with:
           dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
           is_release: ${{ inputs.is_release }}
+          defer_dependency_track: ${{ inputs.is_release }}
           artifactory_repository_name: ${{ github.event.repository.name }}
           artifactory_artifact_version: ${{ steps.build_java.outputs.git_tag }}
 
