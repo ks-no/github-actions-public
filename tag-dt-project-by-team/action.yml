@@ -26,6 +26,8 @@ runs:
         DT_PROJECT_NAME: ${{ inputs.project_name }}
         DT_PROJECT_VERSION: ${{ inputs.project_version }}
         DT_BASE_URL: "https://dt.fiks.dev.ks.no"
+        GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
       run: |
         set -uo pipefail
 
@@ -41,26 +43,49 @@ runs:
         fi
 
         # ── 1. Locate CODEOWNERS ──────────────────────────────────────
-        CODEOWNERS_FILE=""
+        CODEOWNERS_CONTENT=""
+        CODEOWNERS_SOURCE=""
+
+        # Try local filesystem first (works when code is checked out)
         for candidate in ".github/CODEOWNERS" "CODEOWNERS" "docs/CODEOWNERS"; do
           if [[ -f "$candidate" ]]; then
-            CODEOWNERS_FILE="$candidate"
+            CODEOWNERS_CONTENT=$(cat "$candidate")
+            CODEOWNERS_SOURCE="local: $candidate"
+            echo "::debug::Using local CODEOWNERS: $candidate"
             break
           fi
         done
 
-        if [[ -z "$CODEOWNERS_FILE" ]]; then
-          warn_and_exit "No CODEOWNERS file found; skipping team tagging for '$DT_PROJECT_NAME'."
+        # Fallback: fetch via GitHub API (works at deploy time without checkout)
+        if [[ -z "$CODEOWNERS_CONTENT" && -n "${GITHUB_TOKEN:-}" ]]; then
+          for path in ".github/CODEOWNERS" "CODEOWNERS" "docs/CODEOWNERS"; do
+            ENCODED_PATH=$(jq -rn --arg p "$path" '$p | @uri')
+            API_RESPONSE=$(curl -fsS \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/${ENCODED_PATH}" 2>/dev/null || true)
+            
+            CODEOWNERS_CONTENT=$(echo "$API_RESPONSE" | jq -r '.content // empty' 2>/dev/null | tr -d '\n' | base64 -d 2>/dev/null || true)
+            
+            if [[ -n "$CODEOWNERS_CONTENT" ]]; then
+              CODEOWNERS_SOURCE="GitHub API: $path"
+              echo "::debug::Fetched CODEOWNERS from GitHub API: $path"
+              break
+            fi
+          done
         fi
 
-        echo "::debug::Using CODEOWNERS file: $CODEOWNERS_FILE"
+        if [[ -z "$CODEOWNERS_CONTENT" ]]; then
+          warn_and_exit "No CODEOWNERS file found (tried local and GitHub API); skipping team tagging for '$DT_PROJECT_NAME'."
+        fi
+
+        echo "::debug::Using CODEOWNERS from: $CODEOWNERS_SOURCE"
 
         # ── 2. Parse primary team ─────────────────────────────────────
         # Look for the * catch-all line first
         TEAM_SLUG=""
 
         # Read catch-all line (* pattern) — take the first @ks-no/team-* match
-        CATCHALL_LINE=$(grep -E '^\*[[:space:]]' "$CODEOWNERS_FILE" | head -n1 || true)
+        CATCHALL_LINE=$(echo "$CODEOWNERS_CONTENT" | grep -E '^\*[[:space:]]' | head -n1 || true)
 
         if [[ -n "$CATCHALL_LINE" ]]; then
           TEAM_SLUG=$(echo "$CATCHALL_LINE" \
@@ -71,7 +96,7 @@ runs:
 
         # Fallback: most frequent @ks-no/team-* across the entire file
         if [[ -z "$TEAM_SLUG" ]]; then
-          TEAM_SLUG=$(grep -oE '@ks-no/team-[a-zA-Z0-9_-]+' "$CODEOWNERS_FILE" \
+          TEAM_SLUG=$(echo "$CODEOWNERS_CONTENT" | grep -oE '@ks-no/team-[a-zA-Z0-9_-]+' \
             | sort | uniq -c | sort -rn \
             | head -n1 | awk '{print $2}' || true)
           if [[ -n "$TEAM_SLUG" ]]; then
@@ -80,14 +105,14 @@ runs:
         fi
 
         # Log individual-user owners for diagnostics
-        INDIVIDUAL_OWNERS=$(grep -oE '@[a-zA-Z0-9_-]+' "$CODEOWNERS_FILE" \
+        INDIVIDUAL_OWNERS=$(echo "$CODEOWNERS_CONTENT" | grep -oE '@[a-zA-Z0-9_-]+' \
           | grep -v '@ks-no/' || true)
         if [[ -n "$INDIVIDUAL_OWNERS" ]]; then
           echo "::debug::Skipped individual owners: $(echo "$INDIVIDUAL_OWNERS" | tr '\n' ' ')"
         fi
 
         if [[ -z "$TEAM_SLUG" ]]; then
-          warn_and_exit "No @ks-no/team-* entry found in $CODEOWNERS_FILE; skipping."
+          warn_and_exit "No @ks-no/team-* entry found in CODEOWNERS; skipping."
         fi
 
         # ── 3. Normalize tag name ─────────────────────────────────────
