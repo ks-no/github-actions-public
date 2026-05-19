@@ -33,7 +33,7 @@ runs:
       run: |        
         if [ "$IS_RELEASE" = "false" ]; then
           VERSION=$(git describe --tags --abbrev=8 2>/dev/null || echo "0.0.0-$(git rev-list --count HEAD)-g$(git rev-parse --short=8 HEAD)")
-          if [ "$SUFFIX" == "-" ]: then
+          if [ "$SUFFIX" == "-" ]; then
             VERSION=$(echo "$VERSION" | sed s/-[^-]*-/-/)
           elif [ -n "$SUFFIX" ]; then
             VERSION=$(echo "$VERSION" | sed s/-[^-]*-/-${SUFFIX}-/)
