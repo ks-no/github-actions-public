@@ -222,6 +222,32 @@ runs:
         elif [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
           TOKEN=$(jq -r '.token // empty' "$RESPONSE_FILE" 2>/dev/null || true)
           echo "bom_token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+          # Look up project UUID for downstream steps (retry 3x, 2s delay)
+          if [[ -n "$TOKEN" ]]; then
+            ENCODED_NAME=$(jq -rn --arg v "$DT_PROJECT_NAME" '$v | @uri')
+            ENCODED_VERSION=$(jq -rn --arg v "$PROJECT_VERSION" '$v | @uri')
+            PROJECT_UUID=""
+            for attempt in 1 2 3; do
+              PROJECT_JSON=$(curl -fsS \
+                -H "X-Api-Key: $DT_API_KEY" \
+                "$DT_BASE_URL/api/v1/project/lookup?name=$ENCODED_NAME&version=$ENCODED_VERSION" 2>/dev/null) || true
+              PROJECT_UUID=$(echo "$PROJECT_JSON" | jq -r '.uuid // empty' 2>/dev/null || true)
+              if [[ -n "$PROJECT_UUID" ]]; then
+                break
+              fi
+              if [[ $attempt -lt 3 ]]; then
+                echo "::debug::Project UUID lookup attempt $attempt returned empty, retrying in 2s..."
+                sleep 2
+              fi
+            done
+            if [[ -n "$PROJECT_UUID" ]]; then
+              echo "project_uuid=$PROJECT_UUID" >> "$GITHUB_OUTPUT"
+              echo "::debug::Resolved project UUID: $PROJECT_UUID"
+            else
+              echo "::warning::Could not resolve DT project UUID after 3 attempts"
+            fi
+          fi
         else
           echo "::warning::SBOM upload to Dependency-Track returned HTTP $HTTP_CODE"
           cat "$RESPONSE_FILE" 2>/dev/null || true
@@ -235,6 +261,7 @@ runs:
         dependency_track_api_key: ${{ inputs.dependency_track_api_key }}
         project_name: ${{ inputs.project_name }}
         project_version: ${{ steps.sbom_upload.outputs.project_version }}
+        project_uuid: ${{ steps.sbom_upload.outputs.project_uuid }}
 
     - name: DT vulnerability summary
       if: inputs.dependency_track_api_key != '' && inputs.defer_dependency_track != 'true'
@@ -243,4 +270,29 @@ runs:
         dependency_track_api_key: ${{ inputs.dependency_track_api_key }}
         project_name: ${{ inputs.project_name }}
         project_version: ${{ steps.sbom_upload.outputs.project_version }}
+        project_uuid: ${{ steps.sbom_upload.outputs.project_uuid }}
         bom_upload_token: ${{ steps.sbom_upload.outputs.bom_token }}
+
+    - name: Deactivate release project in DT
+      if: inputs.is_release == 'true' && inputs.dependency_track_api_key != '' && inputs.defer_dependency_track != 'true' && steps.sbom_upload.outputs.project_version == 'release' && steps.sbom_upload.outputs.project_uuid != ''
+      shell: bash
+      env:
+        DT_API_KEY: ${{ inputs.dependency_track_api_key }}
+        DT_PROJECT_UUID: ${{ steps.sbom_upload.outputs.project_uuid }}
+        DT_PROJECT_NAME: ${{ inputs.project_name }}
+        DT_BASE_URL: "https://dt.fiks.dev.ks.no"
+      run: |
+        set -uo pipefail
+
+        HTTP_CODE=$(curl -sS -o /dev/null -w '%{http_code}' \
+          -X PATCH \
+          -H "X-Api-Key: $DT_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d "{\"active\": false}" \
+          "$DT_BASE_URL/api/v1/project/$DT_PROJECT_UUID") || true
+
+        if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
+          echo "Deactivated DT project '$DT_PROJECT_NAME' version 'release'."
+        else
+          echo "::warning::Failed to deactivate DT release project (HTTP $HTTP_CODE). Non-blocking."          
+        fi

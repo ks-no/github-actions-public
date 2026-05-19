@@ -15,6 +15,10 @@ inputs:
     description: 'Dependency-Track project version (environment marker, e.g. main or prod).'
     required: false
     default: 'main'
+  project_uuid:
+    description: 'Optional pre-resolved project UUID. If provided, skips the project lookup.'
+    required: false
+    default: ''
 
 runs:
   using: "composite"
@@ -25,6 +29,7 @@ runs:
         DT_API_KEY: ${{ inputs.dependency_track_api_key }}
         DT_PROJECT_NAME: ${{ inputs.project_name }}
         DT_PROJECT_VERSION: ${{ inputs.project_version }}
+        DT_PROJECT_UUID_INPUT: ${{ inputs.project_uuid }}
         DT_BASE_URL: "https://dt.fiks.dev.ks.no"
         GITHUB_TOKEN: ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
@@ -130,27 +135,34 @@ runs:
 
         BASE_URL="${DT_BASE_URL%/}"
 
-        # URL-encode project name and version
-        ENCODED_NAME=$(jq -rn --arg v "$DT_PROJECT_NAME" '$v | @uri')
-        ENCODED_VERSION=$(jq -rn --arg v "$DT_PROJECT_VERSION" '$v | @uri')
-
         PROJECT_UUID=""
-        for attempt in 1 2 3; do
-          PROJECT_JSON=$(curl -fsS \
-            -H "X-Api-Key: $DT_API_KEY" \
-            "$BASE_URL/api/v1/project/lookup?name=$ENCODED_NAME&version=$ENCODED_VERSION" 2>/dev/null) || true
 
-          PROJECT_UUID=$(echo "$PROJECT_JSON" | jq -r '.uuid // empty' 2>/dev/null || true)
+        # Use pre-resolved UUID if provided
+        if [[ -n "$DT_PROJECT_UUID_INPUT" ]] && [[ "$DT_PROJECT_UUID_INPUT" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+          PROJECT_UUID="$DT_PROJECT_UUID_INPUT"
+          echo "::debug::Using pre-resolved project UUID: $PROJECT_UUID"
+        else
+          # URL-encode project name and version
+          ENCODED_NAME=$(jq -rn --arg v "$DT_PROJECT_NAME" '$v | @uri')
+          ENCODED_VERSION=$(jq -rn --arg v "$DT_PROJECT_VERSION" '$v | @uri')
 
-          if [[ -n "$PROJECT_UUID" ]]; then
-            break
-          fi
+          for attempt in 1 2 3; do
+            PROJECT_JSON=$(curl -fsS \
+              -H "X-Api-Key: $DT_API_KEY" \
+              "$BASE_URL/api/v1/project/lookup?name=$ENCODED_NAME&version=$ENCODED_VERSION" 2>/dev/null) || true
 
-          if [[ $attempt -lt 3 ]]; then
-            echo "::debug::Project lookup attempt $attempt returned empty, retrying in 2s..."
-            sleep 2
-          fi
-        done
+            PROJECT_UUID=$(echo "$PROJECT_JSON" | jq -r '.uuid // empty' 2>/dev/null || true)
+
+            if [[ -n "$PROJECT_UUID" ]]; then
+              break
+            fi
+
+            if [[ $attempt -lt 3 ]]; then
+              echo "::debug::Project lookup attempt $attempt returned empty, retrying in 2s..."
+              sleep 2
+            fi
+          done
+        fi
 
         if [[ -z "$PROJECT_UUID" ]]; then
           warn_and_exit "Could not find DT project '$DT_PROJECT_NAME' version '$DT_PROJECT_VERSION' after 3 attempts."
