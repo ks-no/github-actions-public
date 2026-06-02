@@ -18,6 +18,10 @@ inputs:
     description: 'The suffix to use for snapshot builds, like "SNAPSHOT" or "alpha". If not set, it defaults to the number of commits since last tag, as output by "git describe". Set to "-" to remove the suffix altogether.'
     required: false
     default: ''
+  strip_commit_sha:
+    description: 'Whether to not include the shortened git SHA in the version name'
+    required: false
+    default: 'false'
 
 outputs:
   resolved_version:
@@ -37,6 +41,9 @@ runs:
             VERSION=$(echo "$VERSION" | sed s/-[^-]*-/-/)
           elif [ -n "$SUFFIX" ]; then
             VERSION=$(echo "$VERSION" | sed s/-[^-]*-/-${SUFFIX}-/)
+          fi
+          if [ "$STRIP_SHA" == "true" ]; then
+            VERSION=$(echo "$VERSION" | sed s/-[^-]*$//)
           fi
         
         elif [[ -n "$SEMVER_INCREMENT" ]]; then
@@ -84,3 +91,4 @@ runs:
         SEMVER_INCREMENT: ${{ inputs.semver_increment }}
         IS_RELEASE: ${{ inputs.is_release }}
         SUFFIX: ${{ inputs.snapshot_string }}
+        STRIP_SHA: ${{ inputs.strip_commit_sha }}
