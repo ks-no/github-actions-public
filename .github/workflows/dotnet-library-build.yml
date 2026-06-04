@@ -134,7 +134,7 @@ jobs:
           artifactory-password: ${{ secrets.ARTIFACTORY_PASSWORD }}
 
       - name: Test Results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: Tests (Linux)
@@ -150,7 +150,7 @@ jobs:
 
       - name: Upload SBOM
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: bom.json
@@ -179,7 +179,7 @@ jobs:
           certificate-password: ${{ secrets.CODE_SIGN_PFX_PASS }}
 
       - name: Upload Packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nuget-packages
           path: |
@@ -236,7 +236,7 @@ jobs:
           test-verbosity: ${{ inputs.windows-test-verbosity || 'detailed'}}
 
       - name: Test Results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: Tests (Windows)
@@ -255,12 +255,12 @@ jobs:
       !startsWith(github.ref, 'refs/heads/dependabot/')
     runs-on: windows-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: nuget-packages
           path: packages
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
 
@@ -295,7 +295,7 @@ jobs:
           submodules: true
           token: ${{ steps.setup-github-app.outputs.app_token }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: nuget-packages
           path: release-packages
