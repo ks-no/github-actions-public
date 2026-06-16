@@ -1,0 +1,7 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        ks-no/*: any       # trust your own org; allow @main/@vX/@sha
+        actions/*: ref-pin # require at least tag/branch/SHA for GitHub-maintained actions
+        "*": hash-pin      # everyone else must be SHA pinned

@@ -8,4 +8,4 @@ runs:
       shell: bash
       run: |
         pip install zizmor
-        zizmor --format=github . || true
+        zizmor --config "${GITHUB_ACTION_PATH}/zizmor.yml" --format=github . || true
