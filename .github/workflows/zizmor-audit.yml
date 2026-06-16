@@ -1,0 +1,12 @@
+name: Zizmor Audit
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  zizmor-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ks-no/github-actions-public/zizmor-scan@main

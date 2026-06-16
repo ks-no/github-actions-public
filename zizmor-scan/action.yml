@@ -1,0 +1,11 @@
+name: 'Zizmor Security Audit'
+description: 'Run Zizmor GitHub Actions security linter with GitHub annotations output'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run Zizmor scan
+      shell: bash
+      run: |
+        pip install zizmor
+        zizmor --format=github . || true
