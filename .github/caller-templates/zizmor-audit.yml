@@ -9,4 +9,8 @@ on:
 jobs:
   audit:
     uses: ks-no/github-actions-public/.github/workflows/zizmor-audit.yml@main
+    with:
+      # Optional: hvis github advanced security er konfigurert kan man få outputten i github security tab ved å bruke sarif.
+      # Defaults to 'github' for inline PR/push annotations.
+      # output_format: sarif
     secrets: inherit

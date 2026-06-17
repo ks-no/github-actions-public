@@ -1,6 +1,12 @@
 name: 'Zizmor Security Audit'
 description: 'Run Zizmor GitHub Actions security linter with GitHub annotations output'
 
+inputs:
+  output_format:
+    description: 'The output format for Zizmor'
+    required: false
+    default: 'github'
+
 runs:
   using: 'composite'
   steps:
@@ -8,4 +14,15 @@ runs:
       shell: bash
       run: |
         pip install zizmor
-        zizmor --config "${GITHUB_ACTION_PATH}/zizmor.yml" --format=github . || true
+        if [ "${{ inputs.output_format }}" = "sarif" ]; then
+          zizmor --config "${GITHUB_ACTION_PATH}/zizmor.yml" --format=sarif . > zizmor-results.sarif || true
+        else
+          zizmor --config "${GITHUB_ACTION_PATH}/zizmor.yml" --format=github . || true
+        fi
+
+    - name: Upload SARIF results
+      if: ${{ inputs.output_format == 'sarif' }}
+      uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
+      with:
+        sarif_file: zizmor-results.sarif
+        category: zizmor
