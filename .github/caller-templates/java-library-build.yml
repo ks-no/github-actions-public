@@ -1,0 +1,25 @@
+name: Build Java Library
+description: Builds, tests, and publishes a Java library to Artifactory using Maven. Supports snapshot and release builds.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      is_release:
+        description: 'Release build?'
+        type: boolean
+        default: false
+      version:
+        description: 'Version number for release (e.g. 1.2.3). Leave empty for auto.'
+        type: string
+        required: false
+
+jobs:
+  build:
+    uses: ks-no/github-actions-public/.github/workflows/java-library-build.yml@main
+    secrets: inherit
+    with:
+      is_release: ${{ inputs.is_release || false }}
+      version: ${{ inputs.version || '' }}

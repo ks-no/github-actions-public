@@ -1,0 +1,25 @@
+name: Build .NET Library
+description: Builds, tests, signs, and publishes a .NET NuGet library to Artifactory. Supports release builds, NuGet.org publishing, and KeyLocker code signing.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      is-release:
+        description: 'Release build?'
+        type: boolean
+        default: false
+      push-to-nuget-org:
+        description: 'Push to nuget.org?'
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    uses: ks-no/github-actions-public/.github/workflows/dotnet-library-build.yml@main
+    secrets: inherit
+    with:
+      is-release: ${{ inputs.is-release || false }}
+      push-to-nuget-org: ${{ inputs.push-to-nuget-org || false }}

@@ -1,0 +1,12 @@
+name: Zizmor Security Audit
+description: Scans GitHub Actions workflow files for security vulnerabilities using zizmor. Runs automatically on every push and pull request.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  audit:
+    uses: ks-no/github-actions-public/.github/workflows/zizmor-audit.yml@main
+    secrets: inherit
