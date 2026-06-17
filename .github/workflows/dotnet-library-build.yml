@@ -152,7 +152,7 @@ jobs:
           artifactory-password: ${{ secrets.ARTIFACTORY_PASSWORD }}
 
       - name: Test Results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: Tests (Linux)
@@ -168,7 +168,7 @@ jobs:
 
       - name: Upload SBOM
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: bom.json
@@ -199,7 +199,7 @@ jobs:
 
       - name: Upload Packages (unsigned for KeyLocker signing)
         if: inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nuget-packages-unsigned
           path: |
@@ -209,7 +209,7 @@ jobs:
 
       - name: Upload Packages (already signed)
         if: ${{ !(inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages) }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nuget-packages
           path: |
@@ -285,12 +285,12 @@ jobs:
             Write-Output "⚠ Using PFX as fallback for code signing"
           }
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: nuget-packages-unsigned
           path: packages
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
 
@@ -304,7 +304,7 @@ jobs:
 
       - name: Set up KeyLocker (DigiCert)
         if: steps.signing-method.outputs.use-keylocker == 'true'
-        uses: digicert/code-signing-software-trust-action@6687ca63bb7d70538f70d62c790382a77e6caadb
+        uses: digicert/code-signing-software-trust-action@fae23a455ba4bde62b64fd7cb2f81ade788f5a95
         with:
           simple-signing-mode: false
         env:
@@ -351,7 +351,7 @@ jobs:
           Write-Output "KeyLocker temp cert cleanup completed"
 
       - name: Upload Signed Packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nuget-packages-signed
           path: |
@@ -409,7 +409,7 @@ jobs:
           test-verbosity: ${{ inputs.windows-test-verbosity || 'detailed'}}
 
       - name: Test Results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: Tests (Windows)
@@ -429,12 +429,12 @@ jobs:
       !startsWith(github.ref, 'refs/heads/dependabot/')
     runs-on: windows-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: nuget-packages-signed
           path: packages
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
 
@@ -470,7 +470,7 @@ jobs:
           submodules: true
           token: ${{ steps.setup-github-app.outputs.app_token }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: nuget-packages-signed
           path: release-packages
