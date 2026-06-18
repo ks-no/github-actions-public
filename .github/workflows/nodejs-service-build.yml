@@ -4,21 +4,25 @@ on:
   workflow_call:
     inputs:
       app_name:
-        description: 'Application name used for Docker image and deploy helm chart.'
-        required: true
+        description: 'Application/image name. Defaults to repository name if not set.'
+        required: false
         type: string
-      chart_name:
-        description: 'The Helm chart name to publish/deploy.'
-        required: true
+        default: ''
+      helm_chart:
+        description: 'The Helm chart name to publish/deploy. Leave empty to skip helm publish and deploy.'
+        required: false
         type: string
-      chart_path:
-        description: 'Path to the Helm chart folder in the repository.'
-        required: true
+        default: ''
+      helm_folder:
+        description: 'The folder in repo where the Helm chart is located. Defaults to charts/{helm_chart}.'
+        required: false
         type: string
+        default: ''
       docker_registry:
-        description: 'Docker registry hostname (for example docker-all.artifactory.fiks.ks.no).'
-        required: true
+        description: 'Docker registry hostname.'
+        required: false
         type: string
+        default: 'docker-all.artifactory.fiks.ks.no'
       environment:
         description: 'Deployment environment.'
         required: false
@@ -61,8 +65,9 @@ on:
         default: 'host'
       ks_runner_app_id:
         description: 'GitHub App ID used by deploy action.'
-        required: true
+        required: false
         type: string
+        default: ''
     secrets:
       ARTIFACTORY_USERNAME:
         required: true
@@ -96,7 +101,7 @@ jobs:
           fetch-depth: '1'
           fetch-tags: 'false'
 
-      - name: Resolve version from package.json
+      - name: Resolve app name and version from package.json
         id: version
         shell: bash
         run: |
@@ -106,6 +111,12 @@ jobs:
           IMAGE_TAG="${PROJECT_VERSION}-${SHORT_SHA}"
           CHART_VERSION="${PROJECT_VERSION}-sha${SHORT_SHA}"
 
+          APP_NAME="${{ inputs.app_name }}"
+          if [ -z "$APP_NAME" ]; then
+            APP_NAME="${{ github.event.repository.name }}"
+          fi
+
+          echo "app_name=$APP_NAME" >> "$GITHUB_OUTPUT"
           echo "project_version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
           echo "chart_version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
@@ -131,10 +142,10 @@ jobs:
           file: ${{ inputs.dockerfile_path }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ inputs.docker_registry }}/${{ inputs.app_name }}:${{ steps.version.outputs.image_tag }}
-            ${{ github.ref == 'refs/heads/main' && inputs.push_latest_on_main && format('{0}/{1}:latest', inputs.docker_registry, inputs.app_name) || '' }}
-          cache-from: type=registry,ref=${{ inputs.docker_registry }}/${{ inputs.app_name }}:buildcache
-          cache-to: type=registry,ref=${{ inputs.docker_registry }}/${{ inputs.app_name }}:buildcache,mode=max,image-manifest=true
+            ${{ inputs.docker_registry }}/${{ steps.version.outputs.app_name }}:${{ steps.version.outputs.image_tag }}
+            ${{ github.ref == 'refs/heads/main' && inputs.push_latest_on_main && format('{0}/{1}:latest', inputs.docker_registry, steps.version.outputs.app_name) || '' }}
+          cache-from: type=registry,ref=${{ inputs.docker_registry }}/${{ steps.version.outputs.app_name }}:buildcache
+          cache-to: type=registry,ref=${{ inputs.docker_registry }}/${{ steps.version.outputs.app_name }}:buildcache,mode=max,image-manifest=true
           provenance: false
 
       - name: Setup and configure JFrog CLI
@@ -145,22 +156,22 @@ jobs:
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
 
       - name: Publish Helm chart
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && inputs.helm_chart != ''
         uses: ks-no/github-actions/publish-helm@main
         with:
-          chart_name: ${{ inputs.chart_name }}
+          chart_name: ${{ inputs.helm_chart }}
           chart_version: ${{ steps.version.outputs.chart_version }}
           image_tag: ${{ steps.version.outputs.image_tag }}
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
-          helm_folder: ${{ inputs.chart_path }}
+          helm_folder: ${{ inputs.helm_folder || format('charts/{0}', inputs.helm_chart) }}
 
       - name: Deploy application
-        if: github.event_name != 'pull_request' && inputs.autodeploy == true
+        if: github.event_name != 'pull_request' && inputs.autodeploy == true && inputs.helm_chart != ''
         uses: ks-no/github-actions-public/deploy@main
         with:
-          helm_chart: ${{ inputs.chart_name }}
+          helm_chart: ${{ inputs.helm_chart }}
           environment: ${{ inputs.environment }}
           version: ${{ steps.version.outputs.chart_version }}
           ks_github_app_id: ${{ inputs.ks_runner_app_id }}
