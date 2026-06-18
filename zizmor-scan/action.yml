@@ -10,15 +10,13 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Prepare Zizmor config in workspace
+      shell: bash
+      run: cp "${{ github.action_path }}/zizmor.yml" "${{ github.workspace }}/.zizmor.yml"
+
     - name: Run Zizmor scan
       uses: zizmorcore/zizmor-action@5f14fd08f7cf1cb1609c1e344975f152c7ee938d # v0.5.6
       with:
-        config: ${{ github.action_path }}/zizmor.yml
-        
-
-    - name: Upload SARIF results
-      if: ${{ inputs.output_format == 'sarif' }}
-      uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
-      with:
-        sarif_file: zizmor-results.sarif
-        category: zizmor
+        config: ${{ github.workspace }}/.zizmor.yml
+        advanced-security: ${{ inputs.output_format == 'sarif' }}
+        annotations: ${{ inputs.output_format == 'github' }}

@@ -81,6 +81,8 @@ on:
 permissions:
   id-token: write
   contents: read
+  #enable den under hvis GHAS e aktiv og du vil ha zizmor scan output der
+  #security-events: write
 
 jobs:
   build-and-deploy:
