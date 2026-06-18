@@ -1,0 +1,51 @@
+name: Build and Deploy Node.js Service
+description: Builds a Node.js service, publishes Docker/Helm artifacts, and optionally deploys to OpenShift using the reusable workflow.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    uses: ks-no/github-actions-public/.github/workflows/nodejs-service-build.yml@main
+    secrets:
+      ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
+      ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
+      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      KS_RUNNER_PRIVATE_KEY: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+    with:
+      app_name: ''
+      helm_chart: ''
+      environment: 'dev'
+      dockerfile_path: './Dockerfile'
+      build_context: '.'
+      push_latest_on_main: true
+      # Optional (copy-edit): set a custom application/image name.
+      # app_name: 'my-node-service'
+      # Optional (copy-edit): set chart name to enable publish/deploy flow.
+      # helm_chart: 'my-node-service'
+      # Optional (copy-edit): deployment is enabled by default in the reusable workflow.
+      # Uncomment to disable deployment when you only want to build/publish artifacts.
+      # autodeploy: false
+      # Optional (copy-edit): uncomment to override the default Artifactory Docker registry hostname.
+      # docker_registry: 'docker-all.artifactory.fiks.ks.no'
+      # Optional (copy-edit): uncomment if chart files are outside charts/{helm_chart}.
+      # helm_folder: 'deploy/helm/my-service'
+      # Optional (copy-edit): set a non-default deploy environment.
+      # environment: 'prod'
+      # Optional (copy-edit): uncomment to tune Buildx settings when needed.
+      # buildx_builder_image: 'moby/buildkit:v0.21.0'
+      # buildx_network: 'host'
+      # Optional (copy-edit): customize Docker build paths.
+      # dockerfile_path: './Dockerfile'
+      # build_context: '.'
+      # Optional (copy-edit): disable publishing :latest on main.
+      # push_latest_on_main: false
+      # Optional (copy-edit): uncomment to pass GitHub App ID via repository variable for deploy action.
+      # ks_runner_app_id: ${{ vars.KS_RUNNER_APP_ID }}

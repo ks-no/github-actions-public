@@ -14,6 +14,6 @@ jobs:
   audit:
     uses: ks-no/github-actions-public/.github/workflows/zizmor-audit.yml@main
     with:
-      # Optional: hvis github advanced security er konfigurert kan man få outputten i github security tab ved å bruke sarif.
-      # Defaulter til 'github', hvis ingenting er satt slik at det vises i github summary.
-      # output_format: sarif 
+      # Optional: use SARIF output to publish findings in the GitHub Security tab.
+      # Default is 'github' when not set, which writes findings to the job summary/annotations.
+      # output_format: sarif

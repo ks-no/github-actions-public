@@ -32,7 +32,7 @@ on:
         description: 'Set true to deploy after successful build/publish on non-PR events.'
         required: false
         type: boolean
-        default: false
+        default: true
       node_version:
         description: 'Node.js version input reserved for future use.'
         required: false

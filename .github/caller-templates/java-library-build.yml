@@ -16,10 +16,27 @@ on:
         type: string
         required: false
 
+permissions:
+  id-token: write
+  contents: write
+  checks: write
+
 jobs:
   build:
     uses: ks-no/github-actions-public/.github/workflows/java-library-build.yml@main
-    secrets: inherit
+    secrets:
+      ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
+      ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
+      KS_RUNNER_APP_ID: ${{ secrets.KS_RUNNER_APP_ID }}
+      KS_RUNNER_PRIVATE_KEY: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+      DEPENDENCY_TRACK_API_KEY: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
     with:
       is_release: ${{ inputs.is_release || false }}
       version: ${{ inputs.version || '' }}
+      # Optional (copy-edit): uncomment to use GitHub-hosted runners for public repositories.
+      # runner: 'ubuntu-latest'
+      # Optional (copy-edit): uncomment to set reviewer used in generated release notes.
+      # reviewer: 'team-platform'
+      # Optional (copy-edit): uncomment to trigger component tests after build.
+      # component_test_project: 'fiks-io-klient-java-komponent-test'
+      # component_test_version: '1.2.3'

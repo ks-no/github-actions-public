@@ -16,10 +16,35 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: write
+  checks: write
+
 jobs:
   build:
     uses: ks-no/github-actions-public/.github/workflows/dotnet-library-build.yml@main
-    secrets: inherit
+    secrets:
+      ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
+      ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      KS_RUNNER_APP_ID: ${{ secrets.KS_RUNNER_APP_ID }}
+      KS_RUNNER_PRIVATE_KEY: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+      DEPENDENCY_TRACK_API_KEY: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+      # Optional signing secrets (required by selected signing strategy):
+      # CODE_SIGN_CERT_BASE64: ${{ secrets.CODE_SIGN_CERT_BASE64 }}
+      # CODE_SIGN_PFX_PASS: ${{ secrets.CODE_SIGN_PFX_PASS }}
+      # SM_API_KEY: ${{ secrets.SM_API_KEY }}
+      # SM_CLIENT_CERT_FILE_B64: ${{ secrets.SM_CLIENT_CERT_FILE_B64 }}
+      # SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
+      # SM_CODE_SIGNING_CERT_SHA1_HASH: ${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }}
     with:
       is-release: ${{ inputs.is-release || false }}
       push-to-nuget-org: ${{ inputs.push-to-nuget-org || false }}
+      # Optional (copy-edit): uncomment and set an explicit release version (for example 1.2.3).
+      # specified-version: '1.2.3'
+      # Optional (copy-edit): uncomment to disable the parallel Windows build.
+      # run-windows-build: false
+      # Optional (copy-edit): uncomment to trigger remote integration tests after publish.
+      # integration-test-repo: 'fiks-io-client-dotnet-integration-tests'
+      # integration-test-workflow: 'dotnet-component-test-pipeline-windows.yml'
+      # integration-test-package-name: 'KS.Fiks.IO.Client'
