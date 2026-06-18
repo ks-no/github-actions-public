@@ -24,6 +24,8 @@ permissions:
   id-token: write
   contents: write
   checks: write
+  #enable the below if you want to have zizmor scan output in GHAS security tab
+  #security-events: write
 
 jobs:
   build:

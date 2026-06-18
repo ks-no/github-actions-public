@@ -8,7 +8,8 @@ on:
 
 permissions:
   contents: read
-  security-events: write
+  #enable the below if you want to have zizmor scan output in GHAS security tab
+  #security-events: write
 
 jobs:
   audit:
