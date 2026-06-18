@@ -10,13 +10,13 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Prepare Zizmor config in workspace
+    - name: Prepare Zizmor config in repo root
       shell: bash
-      run: cp "${{ github.action_path }}/zizmor.yml" "${{ github.workspace }}/.zizmor.yml"
+      run: cp "${{ github.action_path }}/zizmor.yml" ".zizmor.yml"
 
     - name: Run Zizmor scan
       uses: zizmorcore/zizmor-action@5f14fd08f7cf1cb1609c1e344975f152c7ee938d # v0.5.6
       with:
-        config: ${{ github.workspace }}/.zizmor.yml
+        config: .zizmor.yml
         advanced-security: ${{ inputs.output_format == 'sarif' }}
         annotations: ${{ inputs.output_format == 'github' }}
