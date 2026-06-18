@@ -6,11 +6,14 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   audit:
     uses: ks-no/github-actions-public/.github/workflows/zizmor-audit.yml@main
     with:
       # Optional: hvis github advanced security er konfigurert kan man få outputten i github security tab ved å bruke sarif.
-      # Defaults to 'github' for inline PR/push annotations.
-      # output_format: sarif
-    secrets: inherit
+      # Defaulter til 'github', hvis ingenting er satt slik at det vises i github summary.
+      # output_format: sarif 
