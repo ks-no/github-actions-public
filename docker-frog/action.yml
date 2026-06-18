@@ -1,0 +1,27 @@
+name: 'Prepare JFrog CLI for Docker'
+description: 'Sets up JFrog CLI, configures it with Artifactory, and logs in for Docker.'
+
+inputs:
+  artifactory_username:
+    description: 'The username for Artifactory'
+    required: true
+  artifactory_password:
+    description: 'The password for Artifactory'
+    required: true
+  docker_repo:
+    description: 'The folder to which Docker needs access'
+    required: false
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup JFrog CLI
+      uses: ks-no/github-actions-public/setup-jfrog-cli@main
+      with:
+        artifactory_username: ${{ inputs.artifactory_username }}
+        artifactory_password: ${{ inputs.artifactory_password }}
+
+    - name: Docker login
+      shell: bash
+      run: jf docker login
