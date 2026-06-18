@@ -52,6 +52,8 @@ permissions:
   id-token: write
   contents: write
   checks: write
+  #enable the below if you want to have zizmor scan output in GHAS security tab
+  #security-events: write
 
 jobs:
   build:
@@ -76,6 +78,10 @@ jobs:
           token: ${{ steps.app_token.outputs.app_token }}
           fetch-tags: true
 
+      - name: Zizmor Scan
+        uses: ks-no/github-actions-public/zizmor-scan@main
+        with:
+          output_format: 'github' # Use 'sarif' for GHAS Security tab, or 'github' for inline annotations
       - name: Switch Java Version
         if: inputs.runner!= 'ubuntu-latest'
         run: |
