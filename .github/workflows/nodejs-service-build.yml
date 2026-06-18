@@ -101,6 +101,9 @@ jobs:
           fetch-depth: '1'
           fetch-tags: 'false'
 
+      - name: Zizmor Scan
+        uses: ks-no/github-actions-public/zizmor-scan@main
+
       - name: Resolve app name and version from package.json
         id: version
         shell: bash
