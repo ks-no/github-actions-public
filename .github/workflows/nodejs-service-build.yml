@@ -1,0 +1,179 @@
+name: 'Node.js Service Build and Deploy reusable workflow'
+
+on:
+  workflow_call:
+    inputs:
+      app_name:
+        description: 'Application name used for Docker image and deploy helm chart.'
+        required: true
+        type: string
+      chart_name:
+        description: 'The Helm chart name to publish/deploy.'
+        required: true
+        type: string
+      chart_path:
+        description: 'Path to the Helm chart folder in the repository.'
+        required: true
+        type: string
+      docker_registry:
+        description: 'Docker registry hostname (for example docker-all.artifactory.fiks.ks.no).'
+        required: true
+        type: string
+      environment:
+        description: 'Deployment environment.'
+        required: false
+        type: string
+        default: 'dev'
+      autodeploy:
+        description: 'Set true to deploy after successful build/publish on non-PR events.'
+        required: false
+        type: boolean
+        default: false
+      node_version:
+        description: 'Node.js version input reserved for future use.'
+        required: false
+        type: string
+        default: '22'
+      dockerfile_path:
+        description: 'Path to Dockerfile.'
+        required: false
+        type: string
+        default: './Dockerfile'
+      build_context:
+        description: 'Docker build context path.'
+        required: false
+        type: string
+        default: '.'
+      push_latest_on_main:
+        description: 'Set true to publish latest tag on main.'
+        required: false
+        type: boolean
+        default: true
+      buildx_builder_image:
+        description: 'BuildKit image used by docker/setup-buildx-action.'
+        required: false
+        type: string
+        default: 'moby/buildkit:v0.21.0'
+      buildx_network:
+        description: 'Network mode used by Buildx driver.'
+        required: false
+        type: string
+        default: 'host'
+      ks_runner_app_id:
+        description: 'GitHub App ID used by deploy action.'
+        required: true
+        type: string
+    secrets:
+      ARTIFACTORY_USERNAME:
+        required: true
+      ARTIFACTORY_PASSWORD:
+        required: true
+      GPG_PRIVATE_KEY:
+        required: true
+      KS_RUNNER_PRIVATE_KEY:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: [self-hosted, x64]
+    timeout-minutes: 30
+    concurrency:
+      group: ${{ format('autobuild-{0}-{1}', github.repository, github.ref_name) }}
+      cancel-in-progress: true
+    outputs:
+      project_version: ${{ steps.version.outputs.project_version }}
+      image_tag: ${{ steps.version.outputs.image_tag }}
+      chart_version: ${{ steps.version.outputs.chart_version }}
+    steps:
+      - name: Checkout code
+        uses: ks-no/github-actions-public/checkout@main
+        with:
+          submodules: 'false'
+          fetch-depth: '1'
+          fetch-tags: 'false'
+
+      - name: Resolve version from package.json
+        id: version
+        shell: bash
+        run: |
+          PROJECT_VERSION=$(jq -r '.version' package.json)
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+
+          IMAGE_TAG="${PROJECT_VERSION}-${SHORT_SHA}"
+          CHART_VERSION="${PROJECT_VERSION}-sha${SHORT_SHA}"
+
+          echo "project_version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "chart_version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: |
+            image=${{ inputs.buildx_builder_image }}
+            network=${{ inputs.buildx_network }}
+
+      - name: Login to Docker registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ inputs.docker_registry }}
+          username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ inputs.build_context }}
+          file: ${{ inputs.dockerfile_path }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ inputs.docker_registry }}/${{ inputs.app_name }}:${{ steps.version.outputs.image_tag }}
+            ${{ github.ref == 'refs/heads/main' && inputs.push_latest_on_main && format('{0}/{1}:latest', inputs.docker_registry, inputs.app_name) || '' }}
+          cache-from: type=registry,ref=${{ inputs.docker_registry }}/${{ inputs.app_name }}:buildcache
+          cache-to: type=registry,ref=${{ inputs.docker_registry }}/${{ inputs.app_name }}:buildcache,mode=max,image-manifest=true
+          provenance: false
+
+      - name: Setup and configure JFrog CLI
+        if: github.event_name != 'pull_request'
+        uses: ks-no/github-actions-public/setup-jfrog-cli@main
+        with:
+          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+
+      - name: Publish Helm chart
+        if: github.event_name != 'pull_request'
+        uses: ks-no/github-actions/publish-helm@main
+        with:
+          chart_name: ${{ inputs.chart_name }}
+          chart_version: ${{ steps.version.outputs.chart_version }}
+          image_tag: ${{ steps.version.outputs.image_tag }}
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+          helm_folder: ${{ inputs.chart_path }}
+
+      - name: Deploy application
+        if: github.event_name != 'pull_request' && inputs.autodeploy == true
+        uses: ks-no/github-actions-public/deploy@main
+        with:
+          helm_chart: ${{ inputs.chart_name }}
+          environment: ${{ inputs.environment }}
+          version: ${{ steps.version.outputs.chart_version }}
+          ks_github_app_id: ${{ inputs.ks_runner_app_id }}
+          ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+
+      - name: Workflow summary
+        shell: bash
+        run: |
+          {
+            echo "## Node.js Service Build Summary"
+            echo "- project_version: ${{ steps.version.outputs.project_version }}"
+            echo "- image_tag: ${{ steps.version.outputs.image_tag }}"
+            echo "- chart_version: ${{ steps.version.outputs.chart_version }}"
+            echo "- deploy_enabled: ${{ inputs.autodeploy }}"
+            echo "- deploy_executed: ${{ github.event_name != 'pull_request' && inputs.autodeploy }}"
+          } >> "$GITHUB_STEP_SUMMARY"
