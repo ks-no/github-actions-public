@@ -68,6 +68,13 @@ jobs:
       group: ${{ inputs.is_release == true && format('release-{0}', github.repository) || format('autobuild-{0}-{1}', github.repository, github.ref_name) }}
       cancel-in-progress: true
     steps:
+      - name: Validate version inputs
+        uses: ks-no/github-actions-public/validate-version-inputs@main
+        with:
+          version: ${{ inputs.version }}
+          semver_increment: ${{ inputs.semver_increment }}
+          is_release: ${{ inputs.is_release }}
+
       - name: 'Set up GitHub App'
         id: app_token
         uses: ks-no/github-actions-public/setup-github-app@main

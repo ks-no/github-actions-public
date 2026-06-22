@@ -1,0 +1,36 @@
+name: 'Validate Version Inputs'
+description: 'Fails if both version and semver_increment are provided, or if a release build has neither.'
+
+inputs:
+  version:
+    description: 'The explicit release version (e.g., 1.2.3). Mutually exclusive with semver_increment.'
+    required: false
+    default: ''
+  semver_increment:
+    description: 'The semver increment strategy ("next major", "next minor", "next patch"). Mutually exclusive with version.'
+    required: false
+    default: ''
+  is_release:
+    description: 'Whether this is a release build. If true, either version or semver_increment must be set.'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Validate version inputs'
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        SEMVER_INCREMENT="${{ inputs.semver_increment }}"
+        IS_RELEASE="${{ inputs.is_release }}"
+
+        if [[ -n "$VERSION" && -n "$SEMVER_INCREMENT" ]]; then
+          echo "::error::Both 'version' and 'semver_increment' are set. Please provide only one."
+          exit 1
+        fi
+
+        if [[ "$IS_RELEASE" == "true" && -z "$VERSION" && -z "$SEMVER_INCREMENT" ]]; then
+          echo "::error::Release build requires either 'version' or 'semver_increment' to be set."
+          exit 1
+        fi
