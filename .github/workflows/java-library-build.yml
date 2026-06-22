@@ -14,9 +14,14 @@ on:
         type: boolean
         default: false
       version:
-        description: 'The new version number for a release (e.g., 1.2.3).'
+        description: 'The new version number for a release (e.g., 1.2.3). Mutually exclusive with semver_increment.'
         required: false
         type: string
+      semver_increment:
+        description: 'Select semver increment: "next major", "next minor", or "next patch". Mutually exclusive with version.'
+        required: false
+        type: string
+        default: ''
       reviewer:
         description: 'Optional reviewer for the release.'
         required: false
@@ -63,6 +68,13 @@ jobs:
       group: ${{ inputs.is_release == true && format('release-{0}', github.repository) || format('autobuild-{0}-{1}', github.repository, github.ref_name) }}
       cancel-in-progress: true
     steps:
+      - name: Validate version inputs
+        uses: ks-no/github-actions-public/validate-version-inputs@main
+        with:
+          version: ${{ inputs.version }}
+          semver_increment: ${{ inputs.semver_increment }}
+          is_release: ${{ inputs.is_release }}
+
       - name: 'Set up GitHub App'
         id: app_token
         uses: ks-no/github-actions-public/setup-github-app@main
@@ -77,6 +89,13 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app_token.outputs.app_token }}
           fetch-tags: true
+
+      - name: Resolve version
+        id: resolve_version
+        uses: ks-no/github-actions-public/resolve-version@main
+        with:
+          version: ${{ inputs.version }}
+          semver_increment: ${{ inputs.semver_increment }}
 
       - name: Zizmor Scan
         uses: ks-no/github-actions-public/zizmor-scan@main
@@ -133,10 +152,10 @@ jobs:
       - name: Release - Set new version
         if: inputs.is_release == true && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         run: |
-          jfrog mvn versions:set -DnewVersion=${{ inputs.version }} -DgenerateBackupPoms=false
+          jfrog mvn versions:set -DnewVersion=${{ steps.resolve_version.outputs.resolved_version }} -DgenerateBackupPoms=false
           jfrog mvn enforcer:enforce
-          git commit -am "Release ${{ inputs.version }}"
-          git tag -a ${{ inputs.version }} -m "Release ${{ inputs.version }}"
+          git commit -am "Release ${{ steps.resolve_version.outputs.resolved_version }}"
+          git tag -a ${{ steps.resolve_version.outputs.resolved_version }} -m "Release ${{ steps.resolve_version.outputs.resolved_version }}"
 
       - name: Build
         env:
@@ -155,7 +174,7 @@ jobs:
         if: inputs.is_release == true && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         run: |
           jfrog mvn versions:set -DnextSnapshot=true -DgenerateBackupPoms=false
-          git commit -am "Release ${{ inputs.version }}: setting new snapshot version"
+          git commit -am "Release ${{ steps.resolve_version.outputs.resolved_version }}: setting new snapshot version"
 
       - name: Publish Build Info
         env:
@@ -188,8 +207,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app_token.outputs.app_token }}
         with:
-          tag_name: ${{ inputs.version }}
-          name: "Release ${{ inputs.version }}"
+          tag_name: ${{ steps.resolve_version.outputs.resolved_version }}
+          name: "Release ${{ steps.resolve_version.outputs.resolved_version }}"
           body: ${{ steps.generate_body.outputs.release_body }}
           draft: false
           prerelease: false
@@ -209,7 +228,7 @@ jobs:
           dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
           is_release: ${{ inputs.is_release }}
           artifactory_repository_name: ${{ github.event.repository.name }}
-          artifactory_artifact_version: ${{ inputs.version || steps.pom_version.outputs.version }}
+          artifactory_artifact_version: ${{ steps.resolve_version.outputs.resolved_version || steps.pom_version.outputs.version }}
 
 
       - name: read current version for use in component tests
