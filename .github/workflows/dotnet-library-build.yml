@@ -68,11 +68,6 @@ on:
         type: boolean
         required: false
         default: false
-      require-keylocker-on-release:
-        description: 'For release builds, fail if KeyLocker is not available? (prevents accidental fallback to PFX)'
-        type: boolean
-        required: false
-        default: false
     secrets:
       ARTIFACTORY_USERNAME:
         required: true
