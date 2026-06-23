@@ -11,7 +11,7 @@ inputs:
   docker_repo:
     description: 'The folder to which Docker needs access'
     required: false
-    default: ''
+    default: 'docker-all'
 
 runs:
   using: "composite"
@@ -24,4 +24,6 @@ runs:
 
     - name: Docker login
       shell: bash
-      run: jf docker login --server-id artifactory
+      run: jf docker login 'artifactory.fiks.ks.no/$DOCKER_REPO'
+      env:
+        DOCKER_REPO: ${{ inputs.docker_repo }}
