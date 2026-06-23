@@ -86,7 +86,7 @@ permissions:
 
 jobs:
   build-and-deploy:
-    runs-on: [self-hosted, x64]
+    runs-on: [ubuntu-latest]
     timeout-minutes: 30
     concurrency:
       group: ${{ format('autobuild-{0}-{1}', github.repository, github.ref_name) }}

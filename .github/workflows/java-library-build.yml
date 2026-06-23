@@ -31,7 +31,7 @@ on:
         description: 'The runner to use. Use "ubuntu-latest" for public repos.'
         required: false
         type: string
-        default: 'self-hosted, x64'
+        default: 'ubuntu-latest'
       component_test_project:
         description: 'GitHub repo name (under ks-no) of the component test project to trigger after build (e.g. fiks-io-klient-java-komponent-test). Leave empty to skip.'
         required: false
