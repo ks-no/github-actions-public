@@ -196,13 +196,6 @@ jobs:
           artifactory_repository_name: ${{ github.event.repository.name }}
           artifactory_artifact_version: ${{ needs.initialize.outputs.full-version }}
 
-      - name: Sign Packages (PFX - unsigned builds only)
-        if: ${{ !(inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages) }}
-        uses: ks-no/github-actions-public/dotnet-sign-nuget-packages@main
-        with:
-          certificate-base64: ${{ secrets.CODE_SIGN_CERT_BASE64 }}
-          certificate-password: ${{ secrets.CODE_SIGN_PFX_PASS }}
-
       - name: Upload Packages (unsigned for KeyLocker signing)
         if: inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages
         uses: actions/upload-artifact@v4
@@ -259,38 +252,6 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - name: Determine signing method
-        id: signing-method
-        shell: pwsh
-        env:
-          HAS_KEYLOCKER: ${{ secrets.SM_API_KEY != '' && secrets.SM_CLIENT_CERT_FILE_B64 != '' && secrets.SM_CLIENT_CERT_PASSWORD != '' && secrets.SM_CODE_SIGNING_CERT_SHA1_HASH != '' }}
-          HAS_PFX: ${{ secrets.CODE_SIGN_CERT_BASE64 != '' && secrets.CODE_SIGN_PFX_PASS != '' }}
-          IS_RELEASE: ${{ inputs.is-release }}
-          REQUIRE_KEYLOCKER: ${{ inputs.require-keylocker-on-release }}
-        run: |
-          $hasKeyLocker = $env:HAS_KEYLOCKER -eq 'true'
-          $hasPfx = $env:HAS_PFX -eq 'true'
-          $isRelease = $env:IS_RELEASE -eq 'true'
-          $requireKeyLocker = $env:REQUIRE_KEYLOCKER -eq 'true'
-          
-          if (-not $hasKeyLocker -and -not $hasPfx) {
-            Write-Output "ERROR: Neither KeyLocker nor PFX credentials are available"
-            exit 1
-          }
-          
-          if ($requireKeyLocker -and $isRelease -and -not $hasKeyLocker) {
-            Write-Output "ERROR: Release build requires KeyLocker, but credentials not available"
-            exit 1
-          }
-          
-          if ($hasKeyLocker) {
-            Write-Output "use-keylocker=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            Write-Output "✓ Using KeyLocker for code signing"
-          } else {
-            Write-Output "use-keylocker=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            Write-Output "⚠ Using PFX as fallback for code signing"
-          }
-
       - uses: actions/download-artifact@v4
         with:
           name: nuget-packages-unsigned
@@ -300,61 +261,12 @@ jobs:
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
 
-      - name: Decode KeyLocker client certificate
-        if: steps.signing-method.outputs.use-keylocker == 'true'
-        shell: pwsh
-        run: |
-          $certPath = Join-Path $env:RUNNER_TEMP 'sm_client_cert.p12'
-          [System.IO.File]::WriteAllBytes($certPath, [System.Convert]::FromBase64String('${{ secrets.SM_CLIENT_CERT_FILE_B64 }}'))
-          "SM_CLIENT_CERT_FILE=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Set up KeyLocker (DigiCert)
-        if: steps.signing-method.outputs.use-keylocker == 'true'
-        uses: digicert/code-signing-software-trust-action@6687ca63bb7d70538f70d62c790382a77e6caadb
-        with:
-          simple-signing-mode: false
-        env:
-          SM_HOST: https://one.digicert.com
-          SM_API_KEY: ${{ secrets.SM_API_KEY }}
-          SM_CLIENT_CERT_FILE: ${{ env.SM_CLIENT_CERT_FILE }}
-          SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
-
-      - name: Verify KeyLocker installation
-        if: steps.signing-method.outputs.use-keylocker == 'true'
-        shell: pwsh
-        run: |
-          $env:PATH += ";C:\Program Files\DigiCert\DigiCert One\bin"
-          smctl windows ksp list
-          if ($LASTEXITCODE -ne 0) {
-            Write-Output "ERROR: KeyLocker (KSP) verification failed"
-            exit 1
-          }
-          Write-Output "✓ KeyLocker (KSP) verified"
-
       - name: Sign packages with KeyLocker
-        if: steps.signing-method.outputs.use-keylocker == 'true'
-        uses: ks-no/github-actions-public/dotnet-sign-nuget-packages-keylocker@main
-        with:
-          sm-certificate-fingerprint: ${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }}
-          package-root: packages
-          timestamp-url: 'http://timestamp.digicert.com'
-
-      - name: Sign packages with PFX (fallback)
-        if: steps.signing-method.outputs.use-keylocker == 'false'
         uses: ks-no/github-actions-public/dotnet-sign-nuget-packages@main
         with:
           certificate-base64: ${{ secrets.CODE_SIGN_CERT_BASE64 }}
           certificate-password: ${{ secrets.CODE_SIGN_PFX_PASS }}
           package-path: 'packages/**/*.nupkg'
-
-      - name: Clean up KeyLocker credentials
-        if: always() && steps.signing-method.outputs.use-keylocker == 'true'
-        shell: pwsh
-        run: |
-          if ($env:SM_CLIENT_CERT_FILE -and (Test-Path $env:SM_CLIENT_CERT_FILE)) {
-            Remove-Item -Path $env:SM_CLIENT_CERT_FILE -Force -ErrorAction SilentlyContinue
-          }
-          Write-Output "KeyLocker temp cert cleanup completed"
 
       - name: Upload Signed Packages
         uses: actions/upload-artifact@v4

@@ -1,40 +1,66 @@
 name: Sign NuGet Packages
-description: Sign NuGet packages with a code signing certificate
+description: Downloads, signs with DigiCert Software Trust Manager, and re-uploads NuGet packages.
 
 inputs:
-  certificate-base64:
-    description: 'Base64 encoded certificate'
-    required: true
-  certificate-password:
-    description: 'Certificate password'
-    required: true
+  artifact-name:
+    description: 'Name of the artifact containing the .nupkg files'
+    required: false
+    default: 'nupkg'
   package-path:
-    description: 'Path pattern to find packages'
+    description: 'Local path to download packages into'
     required: false
-    default: '**/Release/*.nupkg'
-  timestamp-url:
-    description: 'Timestamp server URL'
+    default: 'packages'
+  signed-artifact-name:
+    description: 'Name of the artifact to upload after signing'
     required: false
-    default: 'http://timestamp.digicert.com'
+    default: 'signed-nupkg'
+  sm-host:
+    description: 'DigiCert Software Trust Manager host URL (SM_HOST)'
+    required: true
+  sm-keypair-alias:
+    description: 'DigiCert keypair alias (SM_KEY_PAIR_ALIAS)'
+    required: true
+  sm-api-key:
+    description: 'DigiCert SM API key (secret)'
+    required: true
+  sm-client-cert-file-base64:
+    description: 'Base64-encoded PKCS12 client certificate (secret)'
+    required: true
+  sm-client-cert-password:
+    description: 'Password for the PKCS12 client certificate (secret)'
+    required: true
 
 runs:
   using: composite
   steps:
-    - name: Sign NuGet packages
+    - name: Download nupkg
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.package-path }}
+
+    # ── Sign package ───────────────────────────────────────────────────────
+    - name: Setup SM_CLIENT_CERT_FILE from base64 secret data
       shell: bash
       run: |
-        # Decode certificate
-        echo "${{ inputs.certificate-base64 }}" | base64 --decode > codesign.pfx
-        
-        # Sign all nupkg files
-        for pkg in $(find . -name "*.nupkg" -path "*/Release/*"); do
-          echo "Signing $pkg"
-          dotnet nuget sign "$pkg" \
-            --timestamper ${{ inputs.timestamp-url }} \
-            --certificate-path codesign.pfx \
-            --certificate-password ${{ inputs.certificate-password }} \
-            -v detailed
-        done
-        
-        # Clean up certificate
-        rm -f codesign.pfx
+        export SM_CLIENT_CERT_FILE="${RUNNER_TEMP}/Certificate_pkcs12.p12"
+        echo "SM_CLIENT_CERT_FILE=$SM_CLIENT_CERT_FILE" >> "$GITHUB_ENV"
+        echo "${{ inputs.sm-client-cert-file-base64 }}" | base64 --decode > "${SM_CLIENT_CERT_FILE}"
+
+    - name: Setup Software Trust Manager and sign
+      uses: digicert/code-signing-software-trust-action@v1
+      with:
+        simple-signing-mode: true
+        input: ${{ inputs.package-path }}
+        keypair-alias: ${{ inputs.sm-keypair-alias }}
+      env:
+        SM_HOST: ${{ inputs.sm-host }}
+        SM_API_KEY: ${{ inputs.sm-api-key }}
+        SM_CLIENT_CERT_FILE: ${{ env.SM_CLIENT_CERT_FILE }}
+        SM_CLIENT_CERT_PASSWORD: ${{ inputs.sm-client-cert-password }}
+
+    - name: Upload signed nupkg
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.signed-artifact-name }}
+        path: ${{ inputs.package-path }}/*.nupkg
