@@ -24,4 +24,4 @@ runs:
 
     - name: Docker login
       shell: bash
-      run: jf docker login
+      run: jf docker login --server-id artifactory
