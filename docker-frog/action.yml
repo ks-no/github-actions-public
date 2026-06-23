@@ -24,6 +24,6 @@ runs:
 
     - name: Docker login
       shell: bash
-      run: jf docker login 'artifactory.fiks.ks.no/$DOCKER_REPO'
+      run: docker login 'artifactory.fiks.ks.no/$DOCKER_REPO' -u ${{ inputs.artifactory_username }} -p ${{ inputs.artifactory_password }}
       env:
         DOCKER_REPO: ${{ inputs.docker_repo }}
