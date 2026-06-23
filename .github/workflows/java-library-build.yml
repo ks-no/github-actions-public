@@ -98,6 +98,7 @@ jobs:
           semver_increment: ${{ inputs.semver_increment }}
 
       - name: Zizmor Scan
+        if: inputs.runner != 'ubuntu-latest'
         uses: ks-no/github-actions-public/zizmor-scan@main
         with:
           output_format: 'github' # Use 'sarif' for GHAS Security tab, or 'github' for inline annotations
