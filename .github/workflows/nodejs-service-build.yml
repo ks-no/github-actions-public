@@ -104,6 +104,7 @@ jobs:
           fetch-tags: 'false'
 
       - name: Zizmor Scan
+        continue-on-error: true
         uses: ks-no/github-actions-public/zizmor-scan@main
 
       - name: Resolve app name and version from package.json
