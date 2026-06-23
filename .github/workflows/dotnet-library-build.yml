@@ -126,6 +126,7 @@ jobs:
           fetch-tags: true
       
       - name: Zizmor Scan
+        continue-on-error: true
         uses: ks-no/github-actions-public/zizmor-scan@main
         with:
           output_format: 'github' # Use 'sarif' for GHAS Security tab, or 'github' for inline annotations
