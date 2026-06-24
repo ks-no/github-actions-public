@@ -68,6 +68,11 @@ runs:
           const clientRepo  = context.repo.repo;
           const clientSha   = context.sha;
 
+          // Resolve the ref to dispatch in the integration test repo. Default to that repo's
+          // default branch so this works whether it uses `main` or `master`.
+          const intRef = process.env.INT_REF
+            || (await github.rest.repos.get({ owner: intOwner, repo: intRepo })).data.default_branch;
+
           const { data: checkRun } = await github.rest.checks.create({
             owner: clientOwner,
             repo:  clientRepo,
@@ -84,7 +89,7 @@ runs:
             owner: intOwner,
             repo:  intRepo,
             workflow_id: workflowId,
-            ref: 'main',
+            ref: intRef,
             inputs: {
               componentVersion,
               componentPackageName,
@@ -94,7 +99,7 @@ runs:
               checkRunId: String(checkRun.id)
             }
           });
-          console.log(`Integration tests triggered in ${intRepo} (check run #${checkRun.id})`);
+          console.log(`Integration tests triggered in ${intRepo}@${intRef} (check run #${checkRun.id})`);
           core.setOutput('check-run-id', String(checkRun.id));
 
     - name: Wait for Integration Tests
