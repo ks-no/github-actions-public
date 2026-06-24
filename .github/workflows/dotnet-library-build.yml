@@ -85,6 +85,16 @@ on:
         required: false
       SM_CLIENT_CERT_PASSWORD:
         required: false
+    outputs:
+      current-version:
+        description: 'Resolved current version'
+        value: ${{ jobs.initialize.outputs.current-version }}
+      next-version:
+        description: 'Next version'
+        value: ${{ jobs.initialize.outputs.next-version }}
+      full-version:
+        description: 'Full version (with prerelease suffix if any)'
+        value: ${{ jobs.initialize.outputs.full-version }}
 
 permissions:
   contents: write
@@ -287,28 +297,26 @@ jobs:
           component-package-name: ${{ inputs.integration-test-package-name }}
           wait-for-completion: ${{ inputs.is-release && 'true' || 'false' }}
 
-  # Signs (release only) and publishes to nuget.org via OIDC trusted publishing.
-  # Mirrors the fiks-io-client-encryption-dotnet flow: sign -> verify -> push.
-  publish:
-    name: Publish to NuGet.org
+  # Signs packages with DigiCert KeyLocker (release only) and uploads them as
+  # nuget-packages-signed. The nuget.org push + GitHub release happen in the CALLING repo's
+  # workflow — NuGet OIDC trusted publishing requires the publishing job to be defined in the
+  # consuming repo (the token's `repository` AND `job_workflow_ref` claims must match that
+  # repo's per-repo trusted-publishing policy; a shared reusable workflow can never match both).
+  sign:
+    name: Sign packages (KeyLocker)
     needs: [initialize, build-linux, build-windows, integration-test]
     if: |
       !cancelled() &&
       needs.build-linux.result == 'success' &&
       (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
       (needs.integration-test.result == 'success' || needs.integration-test.result == 'skipped') &&
-      (inputs.is-release == true || inputs.push-to-nuget-org == true) &&
+      inputs.is-release == true &&
       !startsWith(github.ref, 'refs/heads/dependabot/')
     runs-on: windows-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
-      # Release: KeyLocker signing downloads the unsigned artifact, signs in place,
-      # and re-uploads it as nuget-packages-signed (used by the release job).
       # Pinned to a known-good SHA so a change to the action can never burn a signature.
-      - name: Sign packages with KeyLocker (release only)
-        if: inputs.is-release
+      # Downloads nuget-packages-unsigned, signs in place, re-uploads as nuget-packages-signed.
+      - name: Sign packages with KeyLocker
         uses: ks-no/github-actions-public/dotnet-sign-nuget-packages@6c94bb9073e2619e18b74410ebfed4b40b4f6506
         with:
           artifact-name: nuget-packages-unsigned
@@ -319,65 +327,3 @@ jobs:
           sm-api-key: ${{ secrets.SM_API_KEY }}
           sm-client-cert-file-base64: ${{ secrets.SM_CLIENT_CERT_FILE }}
           sm-client-cert-password: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
-
-      # Pre-release: push the unsigned candidate as-is (nuget.org accepts unsigned packages).
-      - name: Download unsigned packages (pre-release)
-        if: ${{ !inputs.is-release }}
-        uses: actions/download-artifact@v4
-        with:
-          name: nuget-packages-unsigned
-          path: packages
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ inputs.dotnet-version }}
-
-      - name: Push to NuGet.org (OIDC trusted publishing)
-        uses: ks-no/github-actions-public/dotnet-push-to-nuget-org@main
-        with:
-          mode: oidc
-          nuget-user: ${{ secrets.NUGET_USER }}
-          package-path: packages
-          verify-signature: ${{ inputs.is-release }}
-          api-key: ''
-
-  release:
-    name: Release
-    needs: [initialize, build-linux, build-windows, publish]
-    if: |
-      !cancelled() &&
-      needs.build-linux.result == 'success' &&
-      (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
-      needs.publish.result == 'success' &&
-      inputs.is-release == true &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up GitHub App
-        id: setup-github-app
-        uses: ks-no/github-actions-public/setup-github-app@main
-        with:
-          ks_github_app_id: ${{ vars.KS_RUNNER_APP_ID }}
-          ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
-
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-          submodules: true
-          token: ${{ steps.setup-github-app.outputs.app_token }}
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: nuget-packages-signed
-          path: release-packages
-
-      - uses: ks-no/github-actions-public/create-github-release@main
-        with:
-          current-version: ${{ needs.initialize.outputs.current-version }}
-          next-version: ${{ needs.initialize.outputs.next-version }}
-          release-notes: ${{ inputs.release-notes }}
-          reviewer: ${{ inputs.reviewer }}
-          github-token: ${{ steps.setup-github-app.outputs.app_token }}
-          actor: ${{ github.actor }}
-          ref-name: ${{ github.ref_name }}
