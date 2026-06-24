@@ -63,6 +63,11 @@ on:
         type: string
         required: false
         default: 'normal'
+      allow-prerelease:
+        description: 'Comma-separated NuGet package ids allowed to be prerelease (release-gate exceptions)'
+        type: string
+        required: false
+        default: ''
     secrets:
       ARTIFACTORY_USERNAME:
         required: true
@@ -139,6 +144,15 @@ jobs:
           build-opts: ${{ needs.initialize.outputs.build-opts }}
           artifactory-username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory-password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+
+      # Release gate: a release must not drag in prerelease/alpha dependencies (incl. transitive).
+      # Hard-fails build-linux on release -> integration-test and publish are skipped, so no
+      # DigiCert signature is spent on a tainted closure. Warns only on snapshot builds.
+      - name: Check for prerelease dependencies
+        uses: ks-no/github-actions-public/dotnet-check-prerelease-dependencies@main
+        with:
+          fail-on-prerelease: ${{ inputs.is-release }}
+          allow-prerelease: ${{ inputs.allow-prerelease }}
 
       - name: Test Results
         uses: dorny/test-reporter@v1

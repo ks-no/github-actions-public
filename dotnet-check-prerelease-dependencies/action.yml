@@ -1,0 +1,88 @@
+name: Check Prerelease Dependencies
+description: >-
+  Fails (or warns) if any resolved NuGet dependency (including transitive) is a
+  prerelease/alpha version. Use as a release gate so snapshot versions never reach prod.
+  Requires the project/solution to be restored first (reads the restore graph).
+
+inputs:
+  solution-or-project:
+    description: 'Path to .sln or .csproj to inspect. Empty = auto-discover a .sln (then a .csproj).'
+    required: false
+    default: ''
+  fail-on-prerelease:
+    description: 'If "true", exit 1 when a disallowed prerelease dependency is found. Otherwise warn only.'
+    required: false
+    default: 'false'
+  allow-prerelease:
+    description: 'Comma-separated NuGet package ids allowed to be prerelease (intentional exceptions).'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Check for prerelease dependencies
+      shell: bash
+      env:
+        TARGET: ${{ inputs.solution-or-project }}
+        FAIL_ON_PRERELEASE: ${{ inputs.fail-on-prerelease }}
+        ALLOW_PRERELEASE: ${{ inputs.allow-prerelease }}
+      run: |
+        set -euo pipefail
+
+        target="$TARGET"
+        [ -z "$target" ] && target="$(find . -name '*.sln' | head -n1)"
+        [ -z "$target" ] && target="$(find . -name '*.csproj' | head -n1)"
+        if [ -z "$target" ]; then
+          echo "::error::No .sln or .csproj found to inspect for prerelease dependencies."
+          exit 1
+        fi
+        echo "Inspecting dependencies of: $target"
+
+        # Note: --format json requires .NET 9 SDK; repos build on 8.0.x, so we parse the
+        # text output. Each dependency line starts with '>': the package id is field 2 and
+        # the RESOLVED version is the last field. We test only the version column for a
+        # SemVer prerelease ('-'), since package ids themselves may contain '-'
+        # (e.g. KS.Fiks.ASiC-E).
+        dotnet list "$target" package --include-transitive > deps.txt
+        cat deps.txt
+
+        mapfile -t pairs < <(awk '/^[[:space:]]*>/ { print $2 "\t" $NF }' deps.txt | sort -u)
+
+        # Allowlist set.
+        declare -A allow=()
+        if [ -n "$ALLOW_PRERELEASE" ]; then
+          IFS=',' read -ra allow_arr <<< "$ALLOW_PRERELEASE"
+          for a in "${allow_arr[@]}"; do
+            a="$(echo "$a" | xargs)"
+            [ -n "$a" ] && allow["$a"]=1
+          done
+        fi
+
+        violations=0
+        if [ "${#pairs[@]}" -gt 0 ]; then
+          for line in "${pairs[@]}"; do
+            id="${line%%$'\t'*}"
+            ver="${line#*$'\t'}"
+            case "$ver" in
+              *-*)
+                if [ -n "${allow[$id]:-}" ]; then
+                  echo "::notice::Allowed prerelease dependency: $id $ver"
+                else
+                  echo "::error::Prerelease dependency: $id $ver"
+                  violations=$((violations + 1))
+                fi
+                ;;
+            esac
+          done
+        fi
+
+        if [ "$violations" -gt 0 ]; then
+          if [ "$FAIL_ON_PRERELEASE" = "true" ]; then
+            echo "Found $violations disallowed prerelease dependency(ies) — failing release gate."
+            exit 1
+          fi
+          echo "::warning::$violations prerelease dependency(ies) present (not failing: fail-on-prerelease != true)."
+        else
+          echo "No disallowed prerelease dependencies found."
+        fi
