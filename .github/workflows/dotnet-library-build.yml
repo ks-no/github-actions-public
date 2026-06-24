@@ -4,12 +4,12 @@ on:
   workflow_call:
     inputs:
       is-release:
-        description: 'Release build?'
+        description: 'Release build? (signs with DigiCert KeyLocker and publishes to nuget.org)'
         type: boolean
         required: false
         default: false
       push-to-nuget-org:
-        description: 'Push to nuget.org? (for pre-release)'
+        description: 'Push an unsigned pre-release to nuget.org? (no DigiCert signing)'
         type: boolean
         required: false
         default: false
@@ -63,35 +63,22 @@ on:
         type: string
         required: false
         default: 'normal'
-      sign-packages:
-        description: 'Sign NuGet packages? (automatically enabled if is-release or push-to-nuget-org is true)'
-        type: boolean
-        required: false
-        default: false
     secrets:
       ARTIFACTORY_USERNAME:
         required: true
       ARTIFACTORY_PASSWORD:
         required: true
-      CODE_SIGN_CERT_BASE64:
-          required: false
-      CODE_SIGN_PFX_PASS:
-          required: false
-      NUGET_API_KEY:
-        required: true
-      KS_RUNNER_APP_ID:
-        required: true
       KS_RUNNER_PRIVATE_KEY:
         required: true
       DEPENDENCY_TRACK_API_KEY:
         required: true
+      NUGET_USER:
+        required: false
       SM_API_KEY:
         required: false
-      SM_CLIENT_CERT_FILE_B64:
+      SM_CLIENT_CERT_FILE:
         required: false
       SM_CLIENT_CERT_PASSWORD:
-        required: false
-      SM_CODE_SIGNING_CERT_SHA1_HASH:
         required: false
 
 permissions:
@@ -119,7 +106,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-      
+
       - name: Zizmor Scan
         continue-on-error: true
         uses: ks-no/github-actions-public/zizmor-scan@main
@@ -192,112 +179,26 @@ jobs:
           artifactory_repository_name: ${{ github.event.repository.name }}
           artifactory_artifact_version: ${{ needs.initialize.outputs.full-version }}
 
-      - name: Upload Packages (unsigned for KeyLocker signing)
-        if: inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: nuget-packages-unsigned
-          path: |
-            **/Release/*.nupkg
-            **/Release/*.snupkg
-          if-no-files-found: error
-
-      - name: Upload Packages (already signed)
-        if: ${{ !(inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages) }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: nuget-packages
-          path: |
-            **/Release/*.nupkg
-            **/Release/*.snupkg
-          if-no-files-found: error
-
-      - name: Push to Artifactory (unsigned builds only)
-        if: ${{ !(inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages) }}
-        uses: ks-no/github-actions-public/dotnet-push-to-artifactory@main
-        with:
-          artifactory-username: ${{ secrets.ARTIFACTORY_USERNAME }}
-          artifactory-password: ${{ secrets.ARTIFACTORY_PASSWORD }}
-
-      - name: Set up GitHub App
-        id: setup-github-app
-        if: inputs.integration-test-repo != '' && !(inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages)
-        uses: ks-no/github-actions-public/setup-github-app@main
-        with:
-          ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
-          ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
-
-      - name: Trigger Integration Tests (unsigned builds only)
-        if: inputs.integration-test-repo != '' && !(inputs.is-release || inputs.push-to-nuget-org || inputs.sign-packages)
-        uses: ks-no/github-actions-public/trigger-remote-integration-tests@main
-        with:
-          app-token: ${{ steps.setup-github-app.outputs.app_token }}
-          integration-test-repo: ${{ inputs.integration-test-repo }}
-          integration-test-workflow: ${{ inputs.integration-test-workflow }}
-          component-version: ${{ needs.initialize.outputs.full-version }}
-          component-package-name: ${{ inputs.integration-test-package-name }}
-          wait-for-completion: ${{ inputs.is-release && 'true' || 'false' }}
-
-  sign-packages:
-    name: Sign NuGet Packages
-    needs: [initialize, build-linux]
-    if: |
-      inputs.is-release == true ||
-      inputs.push-to-nuget-org == true ||
-      inputs.sign-packages == true
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: nuget-packages-unsigned
-          path: packages
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ inputs.dotnet-version }}
-
-      - name: Sign packages with KeyLocker
-        uses: ks-no/github-actions-public/dotnet-sign-nuget-packages@main
-        with:
-          certificate-base64: ${{ secrets.CODE_SIGN_CERT_BASE64 }}
-          certificate-password: ${{ secrets.CODE_SIGN_PFX_PASS }}
-          package-path: 'packages/**/*.nupkg'
-
-      - name: Upload Signed Packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: nuget-packages-signed
-          path: |
-            packages/**/*.nupkg
-            packages/**/*.snupkg
-          if-no-files-found: error
-
+      # Push the unsigned package to Artifactory for ALL builds so that integration
+      # tests can restore this exact candidate version BEFORE we spend a DigiCert
+      # signature on release. Artifactory is the internal mirror; the signed artifact
+      # is published to nuget.org only.
       - name: Push to Artifactory
         uses: ks-no/github-actions-public/dotnet-push-to-artifactory@main
         with:
           artifactory-username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory-password: ${{ secrets.ARTIFACTORY_PASSWORD }}
-          package-path: 'packages/**/*.nupkg'
 
-      - name: Set up GitHub App
-        id: setup-github-app
-        if: inputs.integration-test-repo != ''
-        uses: ks-no/github-actions-public/setup-github-app@main
+      # Keep the unsigned candidate for the publish job (signing + nuget.org push).
+      - name: Upload unsigned packages
+        if: inputs.is-release || inputs.push-to-nuget-org
+        uses: actions/upload-artifact@v4
         with:
-          ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
-          ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
-
-      - name: Trigger Integration Tests
-        if: inputs.integration-test-repo != ''
-        uses: ks-no/github-actions-public/trigger-remote-integration-tests@main
-        with:
-          app-token: ${{ steps.setup-github-app.outputs.app_token }}
-          integration-test-repo: ${{ inputs.integration-test-repo }}
-          integration-test-workflow: ${{ inputs.integration-test-workflow }}
-          component-version: ${{ needs.initialize.outputs.full-version }}
-          component-package-name: ${{ inputs.integration-test-package-name }}
-          wait-for-completion: ${{ inputs.is-release && 'true' || 'false' }}
+          name: nuget-packages-unsigned
+          path: |
+            **/Release/*.nupkg
+            **/Release/*.snupkg
+          if-no-files-found: error
 
   build-windows:
     name: Build (Windows)
@@ -331,41 +232,99 @@ jobs:
           reporter: dotnet-trx
           fail-on-error: false
 
-  push-nuget-org:
-    name: Push to NuGet.org
-    needs: [initialize, build-linux, build-windows, sign-packages]
+  # Triggers the remote component/integration tests and reports a check run back on the
+  # client repo. On release we WAIT for the result, so a failing component test stops the
+  # release BEFORE any DigiCert signing happens. On snapshot/pre-release it is fire-and-forget.
+  integration-test:
+    name: Integration Tests
+    needs: [initialize, build-linux]
+    if: |
+      !cancelled() &&
+      needs.build-linux.result == 'success' &&
+      inputs.integration-test-repo != '' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' ||
+       inputs.is-release == true || inputs.push-to-nuget-org == true)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up GitHub App
+        id: setup-github-app
+        uses: ks-no/github-actions-public/setup-github-app@main
+        with:
+          ks_github_app_id: ${{ vars.KS_RUNNER_APP_ID }}
+          ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+
+      - name: Trigger Integration Tests
+        uses: ks-no/github-actions-public/trigger-remote-integration-tests@main
+        with:
+          app-token: ${{ steps.setup-github-app.outputs.app_token }}
+          integration-test-repo: ${{ inputs.integration-test-repo }}
+          integration-test-workflow: ${{ inputs.integration-test-workflow }}
+          component-version: ${{ needs.initialize.outputs.full-version }}
+          component-package-name: ${{ inputs.integration-test-package-name }}
+          wait-for-completion: ${{ inputs.is-release && 'true' || 'false' }}
+
+  # Signs (release only) and publishes to nuget.org via OIDC trusted publishing.
+  # Mirrors the fiks-io-client-encryption-dotnet flow: sign -> verify -> push.
+  publish:
+    name: Publish to NuGet.org
+    needs: [initialize, build-linux, build-windows, integration-test]
     if: |
       !cancelled() &&
       needs.build-linux.result == 'success' &&
       (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
-      needs.sign-packages.result == 'success' &&
+      (needs.integration-test.result == 'success' || needs.integration-test.result == 'skipped') &&
       (inputs.is-release == true || inputs.push-to-nuget-org == true) &&
       !startsWith(github.ref, 'refs/heads/dependabot/')
     runs-on: windows-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
-      - uses: actions/download-artifact@v4
+      # Release: KeyLocker signing downloads the unsigned artifact, signs in place,
+      # and re-uploads it as nuget-packages-signed (used by the release job).
+      # Pinned to a known-good SHA so a change to the action can never burn a signature.
+      - name: Sign packages with KeyLocker (release only)
+        if: inputs.is-release
+        uses: ks-no/github-actions-public/dotnet-sign-nuget-packages@6c94bb9073e2619e18b74410ebfed4b40b4f6506
         with:
-          name: nuget-packages-signed
+          artifact-name: nuget-packages-unsigned
+          package-path: packages
+          signed-artifact-name: nuget-packages-signed
+          sm-host: ${{ vars.SM_HOST }}
+          sm-keypair-alias: ${{ vars.SM_KEY_PAIR_ALIAS }}
+          sm-api-key: ${{ secrets.SM_API_KEY }}
+          sm-client-cert-file-base64: ${{ secrets.SM_CLIENT_CERT_FILE }}
+          sm-client-cert-password: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
+
+      # Pre-release: push the unsigned candidate as-is (nuget.org accepts unsigned packages).
+      - name: Download unsigned packages (pre-release)
+        if: ${{ !inputs.is-release }}
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages-unsigned
           path: packages
 
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
 
-      - uses: ks-no/github-actions-public/dotnet-push-to-nuget-org@main
+      - name: Push to NuGet.org (OIDC trusted publishing)
+        uses: ks-no/github-actions-public/dotnet-push-to-nuget-org@main
         with:
-          api-key: ${{ secrets.NUGET_API_KEY }}
+          mode: oidc
+          nuget-user: ${{ secrets.NUGET_USER }}
           package-path: packages
+          verify-signature: ${{ inputs.is-release }}
+          api-key: ''
 
   release:
     name: Release
-    needs: [initialize, build-linux, build-windows, push-nuget-org, sign-packages]
+    needs: [initialize, build-linux, build-windows, publish]
     if: |
       !cancelled() &&
       needs.build-linux.result == 'success' &&
       (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
-      needs.push-nuget-org.result == 'success' &&
-      needs.sign-packages.result == 'success' &&
+      needs.publish.result == 'success' &&
       inputs.is-release == true &&
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
@@ -374,7 +333,7 @@ jobs:
         id: setup-github-app
         uses: ks-no/github-actions-public/setup-github-app@main
         with:
-          ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
+          ks_github_app_id: ${{ vars.KS_RUNNER_APP_ID }}
           ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

@@ -1,10 +1,22 @@
 name: Push to NuGet.org
-description: Push NuGet packages to NuGet.org
+description: Push NuGet packages to NuGet.org via OIDC trusted publishing (default) or API key.
 
 inputs:
+  mode:
+    # OIDC trusted publishing is the target standard. Default stays 'api-key' only
+    # temporarily for backward compatibility with repos still on the old flow; flip the
+    # default to 'oidc' (and eventually drop api-key) once all consumers are migrated.
+    description: 'Authentication mode: "api-key" (legacy) or "oidc" (trusted publishing, target standard)'
+    required: false
+    default: 'api-key'
+  nuget-user:
+    description: 'NuGet.org account for OIDC login (required when mode=oidc). Requires id-token: write on the calling job.'
+    required: false
+    default: ''
   api-key:
-    description: 'NuGet.org API key'
-    required: true
+    description: 'NuGet.org API key (required when mode=api-key)'
+    required: false
+    default: ''
   package-path:
     description: 'Path to packages directory'
     required: false
@@ -13,30 +25,30 @@ inputs:
     description: 'NuGet.org API URL'
     required: false
     default: 'https://api.nuget.org/v3/index.json'
+  verify-signature:
+    description: 'Run "dotnet nuget verify --all" before pushing (use for signed/release packages)'
+    required: false
+    default: 'false'
 
 runs:
   using: composite
   steps:
-    - name: Push to NuGet.org (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        Get-ChildItem -Path ${{ inputs.package-path }} -Filter *.nupkg -Recurse | ForEach-Object {
-          Write-Host "Pushing $($_.FullName) to NuGet.org"
-          dotnet nuget push $_.FullName `
-            -k ${{ inputs.api-key }} `
-            -s ${{ inputs.nuget-url }} `
-            --skip-duplicate
-        }
+    - name: NuGet login (OIDC trusted publishing)
+      if: inputs.mode == 'oidc'
+      id: login
+      uses: NuGet/login@v1
+      with:
+        user: ${{ inputs.nuget-user }}
 
-    - name: Push to NuGet.org (Linux/macOS)
-      if: runner.os != 'Windows'
+    - name: Verify signatures
+      if: inputs.verify-signature == 'true'
+      shell: bash
+      run: dotnet nuget verify "${{ inputs.package-path }}"/*.nupkg --all
+
+    - name: Push to NuGet.org
       shell: bash
       run: |
-        find ${{ inputs.package-path }} -name "*.nupkg" | while read pkg; do
-          echo "Pushing $pkg to NuGet.org"
-          dotnet nuget push "$pkg" \
-            -k ${{ inputs.api-key }} \
-            -s ${{ inputs.nuget-url }} \
-            --skip-duplicate
-        done
+        dotnet nuget push "${{ inputs.package-path }}"/*.nupkg \
+          --api-key "${{ inputs.mode == 'oidc' && steps.login.outputs.NUGET_API_KEY || inputs.api-key }}" \
+          --source "${{ inputs.nuget-url }}" \
+          --skip-duplicate
