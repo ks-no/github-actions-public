@@ -203,15 +203,25 @@ jobs:
           artifactory-username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory-password: ${{ secrets.ARTIFACTORY_PASSWORD }}
 
+      # Stage packages into a FLAT directory so the signed/push steps find them at
+      # packages/*.nupkg. Uploading **/Release/*.nupkg would preserve the nested build
+      # path, and after download the signing/push globs (packages/*.nupkg) miss the files.
+      - name: Stage unsigned packages
+        if: inputs.is-release || inputs.push-to-nuget-org
+        shell: bash
+        run: |
+          mkdir -p staging
+          find . -path '*/Release/*.nupkg' -exec cp {} staging/ \;
+          find . -path '*/Release/*.snupkg' -exec cp {} staging/ \;
+          ls -l staging
+
       # Keep the unsigned candidate for the publish job (signing + nuget.org push).
       - name: Upload unsigned packages
         if: inputs.is-release || inputs.push-to-nuget-org
         uses: actions/upload-artifact@v4
         with:
           name: nuget-packages-unsigned
-          path: |
-            **/Release/*.nupkg
-            **/Release/*.snupkg
+          path: staging/
           if-no-files-found: error
 
   build-windows:
