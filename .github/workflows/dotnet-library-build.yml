@@ -107,7 +107,7 @@ jobs:
       full-version: ${{ steps.version.outputs.full-version }}
       build-opts: ${{ steps.version.outputs.build-opts }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -131,7 +131,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -155,7 +155,7 @@ jobs:
           allow-prerelease: ${{ inputs.allow-prerelease }}
 
       - name: Test Results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: Tests (Linux)
@@ -171,7 +171,7 @@ jobs:
 
       - name: Upload SBOM
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: bom.json
@@ -218,7 +218,7 @@ jobs:
       # Keep the unsigned candidate for the publish job (signing + nuget.org push).
       - name: Upload unsigned packages
         if: inputs.is-release || inputs.push-to-nuget-org
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nuget-packages-unsigned
           path: staging/
@@ -231,7 +231,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -248,7 +248,7 @@ jobs:
           test-verbosity: ${{ inputs.windows-test-verbosity || 'detailed'}}
 
       - name: Test Results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: Tests (Windows)
@@ -323,12 +323,12 @@ jobs:
       # Pre-release: push the unsigned candidate as-is (nuget.org accepts unsigned packages).
       - name: Download unsigned packages (pre-release)
         if: ${{ !inputs.is-release }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: nuget-packages-unsigned
           path: packages
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
 
@@ -360,14 +360,14 @@ jobs:
           ks_github_app_id: ${{ vars.KS_RUNNER_APP_ID }}
           ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
 
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           fetch-tags: true
           submodules: true
           token: ${{ steps.setup-github-app.outputs.app_token }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: nuget-packages-signed
           path: release-packages
