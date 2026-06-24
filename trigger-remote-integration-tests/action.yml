@@ -31,6 +31,10 @@ inputs:
     description: 'Maximum minutes to wait for completion'
     required: false
     default: '50'
+  integration-test-ref:
+    description: "Branch/ref to dispatch in the integration test repo. Empty = use that repo's default branch (handles main vs master)."
+    required: false
+    default: ''
 
 outputs:
   check-run-id:
@@ -51,6 +55,7 @@ runs:
         INT_WORKFLOW: ${{ inputs.integration-test-workflow }}
         COMPONENT_VERSION: ${{ inputs.component-version }}
         COMPONENT_PACKAGE_NAME: ${{ inputs.component-package-name }}
+        INT_REF: ${{ inputs.integration-test-ref }}
       with:
         github-token: ${{ inputs.app-token }}
         script: |
