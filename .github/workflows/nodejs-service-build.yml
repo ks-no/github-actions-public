@@ -154,13 +154,6 @@ jobs:
           cache-to: type=registry,ref=${{ inputs.docker_registry }}/${{ steps.version.outputs.app_name }}:buildcache,mode=max,image-manifest=true
           provenance: false
 
-      - name: Setup and configure JFrog CLI
-        if: github.event_name != 'pull_request'
-        uses: ks-no/github-actions-public/setup-jfrog-cli@main
-        with:
-          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
-          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
-
       - name: Publish Helm chart
         if: github.event_name != 'pull_request' && inputs.helm_chart != ''
         uses: ks-no/github-actions/publish-helm@main
@@ -169,6 +162,7 @@ jobs:
           chart_version: ${{ steps.version.outputs.chart_version }}
           image_tag: ${{ steps.version.outputs.image_tag }}
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          need_jfrog_setup: 'true'
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
           helm_folder: ${{ inputs.helm_folder || format('charts/{0}', inputs.helm_chart) }}

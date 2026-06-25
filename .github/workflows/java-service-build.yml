@@ -128,8 +128,6 @@ jobs:
           chart_version: ${{ steps.build_java.outputs.git_tag }}
           image_tag: ${{ steps.build_java.outputs.git_tag }}
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
-          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
           helm_folder: ${{ inputs.helm_folder || inputs.helm_chart }}
 
       - name: 'Build and Push Docker Image'
