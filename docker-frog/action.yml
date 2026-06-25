@@ -24,6 +24,8 @@ runs:
 
     - name: Docker login
       shell: bash
-      run: docker login 'artifactory.fiks.ks.no/$DOCKER_REPO' -u ${{ inputs.artifactory_username }} -p ${{ inputs.artifactory_password }}
+      run: echo "$RT_PWRD" | docker login "${DOCKER_REPO}.artifactory.fiks.ks.no" -u "$RT_USER" --password-stdin
       env:
         DOCKER_REPO: ${{ inputs.docker_repo }}
+        RT_USER: ${{ inputs.artifactory_username }}
+        RT_PWRD: ${{ inputs.artifactory_password }}
