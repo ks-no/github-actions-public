@@ -9,7 +9,7 @@ inputs:
     description: 'The password for Artifactory'
     required: true
   docker_repo:
-    description: 'The folder to which Docker needs access'
+    description: 'An additional folder to which Docker needs access'
     required: false
     default: 'docker-all'
 
@@ -24,7 +24,11 @@ runs:
 
     - name: Docker login
       shell: bash
-      run: echo "$RT_PWRD" | docker login "${DOCKER_REPO}.artifactory.fiks.ks.no" -u "$RT_USER" --password-stdin
+      run: |
+        echo "$RT_PWRD" | docker login "docker-all.artifactory.fiks.ks.no" -u "$RT_USER" --password-stdin
+        if [ -n $DOCKER_REPO && $DOCKER_REPO != "docker-all" ] ; then
+          echo "$RT_PWRD" | docker login "${DOCKER_REPO}.artifactory.fiks.ks.no" -u "$RT_USER" --password-stdin
+        fi
       env:
         DOCKER_REPO: ${{ inputs.docker_repo }}
         RT_USER: ${{ inputs.artifactory_username }}
