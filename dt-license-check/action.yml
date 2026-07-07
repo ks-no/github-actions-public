@@ -147,30 +147,23 @@ runs:
         TOTAL_COMPONENTS=$(jq 'length' "$COMPONENTS_FILE")
         NORMALIZED_FILE=$(mktemp)
         jq '
-          def norm_category(value):
-            if (value | type) != "string" then
-              "Unknown"
-            else
-              (value | ascii_downcase) as $v
-              | if ($v | contains("non-commercial")) then "Non-Commercial"
-                elif ($v | contains("weak copyleft")) then "Weak Copyleft"
-                elif ($v | contains("copyleft")) then "Copyleft"
-                elif ($v | contains("permissive")) then "Permissive"
-                else "Unknown"
-                end
-            end;
+          def categorize_license(lic):
+            (lic | ascii_downcase) as $v
+            | if ($v | test("(non-commercial|by-nc)")) then "Non-Commercial"
+              elif ($v | test("(agpl|gpl)")) then "Copyleft"
+              elif ($v | test("(lgpl|mpl|epl)")) then "Weak Copyleft"
+              elif ($v | test("(apache|mit|bsd|cc0|isc|mpl-1\\.1)")) then "Permissive"
+              else "Unknown"
+              end;
 
           map({
             name: (.name // "UNKNOWN_COMPONENT"),
             version: (.version // "UNKNOWN_VERSION"),
             license: (.resolvedLicense.licenseId // .license // "UNKNOWN_LICENSE"),
-            category: norm_category(
-              .resolvedLicense.licenseGroup.name
-              // .resolvedLicense.licenseGroup
-              // .resolvedLicense.group
-              // .licenseGroup.name
-              // .licenseGroup
-              // "Unknown"
+            category: (
+              if .license == "UNKNOWN_LICENSE" then "Unknown"
+              else categorize_license(.resolvedLicense.licenseId // .license // "UNKNOWN_LICENSE")
+              end
             )
           })
         ' "$COMPONENTS_FILE" > "$NORMALIZED_FILE"
@@ -205,8 +198,8 @@ runs:
 
             sort_by(.category, .license, .name)
             | group_by([.category, .license])
+            | map("| " + .[0].category + " | " + .[0].license + " | " + (length | tostring) + " | " + instruction(.[0].category; .[0].license) + " |")
             | .[]
-            | "| " + .[0].category + " | " + .[0].license + " | " + (length | tostring) + " | " + instruction(.[0].category; .[0].license) + " |"
           ' "$NORMALIZED_FILE"
           echo ""
           echo "#### Components By License"
@@ -230,9 +223,9 @@ runs:
             sort_by(.category, .license, .name)
             | group_by([.category, .license])
             | .[]
-            | "\\n<details>\\n<summary>" + .[0].category + " | " + .[0].license + " (" + (length | tostring) + ")</summary>\\n\\n"
-              + (map("- " + .name + " (" + .version + ")") | unique | join("\\n"))
-              + "\\n\\nInstruction: " + instruction(.[0].category; .[0].license) + "\\n\\n</details>"
+            | "<details>\n<summary>" + .[0].category + " | " + .[0].license + " (" + (length | tostring) + ")</summary>\n\n"
+              + (map("- " + .name + " (" + .version + ")") | unique | join("\n"))
+              + "\n\nInstruction: " + instruction(.[0].category; .[0].license) + "\n\n</details>\n"
           ' "$NORMALIZED_FILE" >> "$GITHUB_STEP_SUMMARY"
         else
           {
