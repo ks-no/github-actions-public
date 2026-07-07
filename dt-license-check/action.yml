@@ -154,6 +154,7 @@ runs:
         
         if [[ "$LICENSES_HTTP" =~ ^2[0-9]{2}$ ]]; then
           LICENSE_MAP=$(jq 'map({(.licenseId): (if (.licenseGroups | length) > 0 then .licenseGroups[0].name else "Unknown" end)}) | add // {}' /tmp/dt_licenses.json 2>/dev/null || echo '{}')
+          echo "::debug::DT license catalog: fetched $(jq 'length' /tmp/dt_licenses.json) licenses, map size: $(echo "$LICENSE_MAP" | jq 'length')"
         else
           echo "::warning::DT license check: Failed to fetch license catalog (HTTP $LICENSES_HTTP), falling back to regex-based categorization."
           LICENSE_MAP='{}'
@@ -166,7 +167,14 @@ runs:
             if $licenseMap | has($licenseId) then
               $licenseMap[$licenseId]
             else
-              "Unknown"
+              # Fallback regex categorization for unmapped licenses
+              ($licenseId | ascii_downcase) as $v
+              | if ($v | test("(non-commercial|by-nc)")) then "Non-Commercial"
+                elif ($v | test("(agpl|gpl)")) then "Copyleft"
+                elif ($v | test("(lgpl|mpl|epl)")) then "Weak Copyleft"
+                elif ($v | test("(apache|mit|bsd|cc0|isc)")) then "Permissive"
+                else "Unknown"
+                end
             end;
 
           map(
