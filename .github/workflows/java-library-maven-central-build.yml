@@ -194,6 +194,14 @@ jobs:
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Publish Build to Artifactory
+        shell: bash
+        env:
+          JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
+          JFROG_CLI_BUILD_NUMBER: ${{ steps.resolve_version.outputs.resolved_version }}
+        run: |
+          jfrog rt build-publish
+
       - name: Trigger component tests
         if: inputs.component_test_project != ''
         id: trigger_component_tests
@@ -289,14 +297,6 @@ jobs:
             PROFILE="-P release"
           fi
           jfrog mvn -B -e $PROFILE -DskipTests -Dmaven.test.skip=true deploy
-
-      - name: Publish Build Info
-        shell: bash
-        env:
-          JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
-          JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
-        run: |
-          jfrog rt build-publish
 
       - name: Promote Release Build
         if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
