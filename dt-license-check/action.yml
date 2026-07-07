@@ -169,16 +169,19 @@ runs:
               "Unknown"
             end;
 
-          map({
-            name: (.name // "UNKNOWN_COMPONENT"),
-            version: (.version // "UNKNOWN_VERSION"),
-            license: (.resolvedLicense.licenseId // .license // "UNKNOWN_LICENSE"),
-            category: (
-              if .license == "UNKNOWN_LICENSE" then "Unknown"
-              else get_category(.license)
-              end
-            )
-          })
+          map(
+            (.resolvedLicense.licenseId // .license // "UNKNOWN_LICENSE") as $lic
+            | {
+              name: (.name // "UNKNOWN_COMPONENT"),
+              version: (.version // "UNKNOWN_VERSION"),
+              license: $lic,
+              category: (
+                if $lic == "UNKNOWN_LICENSE" then "Unknown"
+                else get_category($lic)
+                end
+              )
+            }
+          )
         ' "$COMPONENTS_FILE" > "$NORMALIZED_FILE"
 
         UNKNOWN_LICENSE_COUNT=$(jq '[.[] | select(.license == "UNKNOWN_LICENSE")] | length' "$NORMALIZED_FILE")
