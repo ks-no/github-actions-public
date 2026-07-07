@@ -187,13 +187,6 @@ jobs:
           export JFROG_CLI_BUILD_NUMBER="${{ github.run_number }}"
           jfrog mvn -DinstallAtEnd=true -U -B clean install
 
-      - name: read current version for use in component tests
-        id: pom_version_for_tests
-        if: inputs.component_test_project != ''
-        run: |
-          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Publish Build info
         shell: bash
         env:
@@ -232,7 +225,7 @@ jobs:
             const intOwner = 'ks-no';
             const intRepo = '${{ inputs.component_test_project }}';
             const workflowId = 'component-test.yml';
-            const componentVersion = '${{ inputs.component_test_version }}' || '${{ steps.pom_version_for_tests.outputs.version }}';
+            const componentVersion = '${{ inputs.component_test_version }}' || '${{ steps.resolve_version.outputs.resolved_version }}';
             const clientOwner = context.repo.owner;
             const clientRepo  = context.repo.repo;
             const clientSha   = context.sha;
