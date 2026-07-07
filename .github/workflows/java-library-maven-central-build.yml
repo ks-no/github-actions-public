@@ -194,7 +194,7 @@ jobs:
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Publish Build to Artifactory
+      - name: Publish Build info
         shell: bash
         env:
           JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
@@ -303,7 +303,7 @@ jobs:
         shell: bash
         env:
           JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
-          JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
+          JFROG_CLI_BUILD_NUMBER: ${{ steps.resolve_version.outputs.resolved_version }}
         run: |
           echo "Delaying promote to ensure all artifacts are available in Artifactory before promotion."
           sleep 15
@@ -314,7 +314,7 @@ jobs:
         shell: bash
         env:
           JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
-          JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
+          JFROG_CLI_BUILD_NUMBER: ${{ steps.resolve_version.outputs.resolved_version }}
         run: |
           jfrog rt build-promote $JFROG_CLI_BUILD_NAME $JFROG_CLI_BUILD_NUMBER
 
