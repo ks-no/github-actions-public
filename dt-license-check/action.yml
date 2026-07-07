@@ -200,23 +200,21 @@ runs:
 
         {
           echo ""
-          echo "### Dependency-Track License Check (Warning Only) - ${DT_PROJECT_NAME} (${DT_PROJECT_VERSION})"
+          echo "### License Check - ${DT_PROJECT_NAME} (${DT_PROJECT_VERSION})"
           echo ""
-          echo "- Project UUID: ${DT_PROJECT_UUID}"
           echo "- Total components: ${TOTAL_COMPONENTS}"
           echo "- Unknown licenses: ${UNKNOWN_LICENSE_COUNT}"
-          echo "- Mode: Warning only (pipeline does not fail)"
           echo "- Project: [View in Dependency-Track](${PROJECT_URL})"
           echo ""
           echo "| Category | License | Components | Instruction |"
           echo "|----------|---------|-----------:|-------------|"
           jq -r '
             def instruction(category; license):
-              if (license == "UNKNOWN_LICENSE" or category == "Unknown") then "Must be classified in Dependency-Track"
-              elif category == "Non-Commercial" then "Approval required"
-              elif category == "Copyleft" then "Escalate and review before release"
-              elif category == "Weak Copyleft" then "Review obligations"
-              else "No action needed"
+              if (license == "UNKNOWN_LICENSE" or category == "Unknown") then "Verifiser at det ikke kreves vurdering av lisensen"
+              elif category == "Non-Commercial" then "Krever godkjenning av lisensansvarlig"
+              elif category == "Copyleft" then "Krever gjennomgang før prodsetting"
+              elif category == "Weak Copyleft" then "Gjennomgå forpliktelser og vurder om tiltak er nødvendig"
+              else "Ingen tiltak nødvendig"
               end;
 
             sort_by(.category, .license, .name)
