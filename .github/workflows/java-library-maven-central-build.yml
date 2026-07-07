@@ -97,7 +97,7 @@ jobs:
 
       - name: Resolve version
         id: resolve_version
-        uses: ks-no/github-actions-public/resolve-version@main
+        uses: ks-no/github-actions-public/complete-version-resolvement@main
         with:
           version: ${{ inputs.version }}
           semver_increment: ${{ inputs.semver_increment }}
