@@ -97,7 +97,7 @@ runs:
 
           HTTP_CODE=$(curl -sS -o "$PAGE_FILE" -w '%{http_code}' \
             -H "X-Api-Key: $DT_API_KEY" \
-            "$DT_BASE_URL/api/v1/component/project/$DT_PROJECT_UUID?pageNumber=$PAGE_NUMBER&pageSize=$PAGE_SIZE") || true
+            "$DT_BASE_URL/api/v1/component/project/$DT_PROJECT_UUID?pageNumber=$PAGE_NUMBER&pageSize=$PAGE_SIZE&sortName=name&sortOrder=asc") || true
 
           if ! [[ "$HTTP_CODE" =~ ^[0-9]{3}$ ]]; then
             rm -f "$PAGE_FILE" "$COMPONENTS_FILE"
@@ -150,7 +150,7 @@ runs:
         # Fetch DT license catalog and build category map
         LICENSES_HTTP=$(curl -sS -o /tmp/dt_licenses.json -w '%{http_code}' \
           -H "X-Api-Key: $DT_API_KEY" \
-          "$DT_BASE_URL/api/v1/license?pageSize=1000") || true
+          "$DT_BASE_URL/api/v1/license?pageSize=1000&sortName=licenseId&sortOrder=asc") || true
         
         if [[ "$LICENSES_HTTP" =~ ^2[0-9]{2}$ ]]; then
           LICENSE_MAP=$(jq 'map(select(.licenseGroups | length > 0) | {(.licenseId): .licenseGroups[0].name}) | add // {}' /tmp/dt_licenses.json 2>/dev/null || echo '{}')
@@ -170,8 +170,8 @@ runs:
               ($licenseId | ascii_downcase) as $v
               | if ($v | test("non-?commercial|by-?nc")) then "Non-Commercial"
                 elif ($v | test("agpl|gpl")) then "Copyleft"
-                elif ($v | test("lgpl|epl|mpl")) then "Weak Copyleft"
-                elif ($v | test("apache|mit|bsd|isc|cc0|public|boost|mozilla|open")) then "Permissive"
+                elif ($v | test("lgpl|epl|mpl|cddl")) then "Weak Copyleft"
+                elif ($v | test("apache|mit|bsd|isc|cc0|unlicense|public.?domain|boost|zlib|wtfpl|0bsd")) then "Permissive"
                 else "Unknown"
                 end
             end;
@@ -219,7 +219,7 @@ runs:
 
             sort_by(.category, .license, .name)
             | group_by([.category, .license])
-            | map("| " + .[0].category + " | " + .[0].license + " | " + (length | tostring) + " | " + instruction(.[0].category; .[0].license) + " |")
+            | map("| " + (.[0].category | gsub("[|]"; "\\|")) + " | " + (.[0].license | gsub("[|]"; "\\|")) + " | " + (length | tostring) + " | " + instruction(.[0].category; .[0].license) + " |")
             | .[]
           ' "$NORMALIZED_FILE"
           echo ""
@@ -244,8 +244,8 @@ runs:
             sort_by(.category, .license, .name)
             | group_by([.category, .license])
             | .[]
-            | "<details>\n<summary>" + .[0].category + " | " + .[0].license + " (" + (length | tostring) + ")</summary>\n\n"
-              + (map("- " + .name + " (" + .version + ")") | unique | join("\n"))
+            | "<details>\n<summary>" + (.[0].category | gsub("[|]"; "\\|")) + " | " + .[0].license + " (" + (length | tostring) + ")</summary>\n\n"
+              + (map("- " + (.name | gsub("[<>]"; "")) + " (" + .version + ")") | unique | join("\n"))
               + "\n\nInstruction: " + instruction(.[0].category; .[0].license) + "\n\n</details>\n"
           ' "$NORMALIZED_FILE" >> "$GITHUB_STEP_SUMMARY"
         else
