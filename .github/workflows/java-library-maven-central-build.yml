@@ -202,6 +202,26 @@ jobs:
         run: |
           jfrog rt build-publish
 
+      - name: Promote Release Build
+        if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        shell: bash
+        env:
+          JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
+          JFROG_CLI_BUILD_NUMBER: ${{ steps.resolve_version.outputs.resolved_version }}
+        run: |
+          echo "Delaying promote to ensure all artifacts are available in Artifactory before promotion."
+          sleep 15
+          jfrog rt build-promote $JFROG_CLI_BUILD_NAME $JFROG_CLI_BUILD_NUMBER
+
+      - name: Promote Snapshot Build
+        if: inputs.is_release != true && !startsWith(github.ref, 'refs/heads/dependabot')
+        shell: bash
+        env:
+          JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
+          JFROG_CLI_BUILD_NUMBER: ${{ steps.resolve_version.outputs.resolved_version }}
+        run: |
+          jfrog rt build-promote $JFROG_CLI_BUILD_NAME $JFROG_CLI_BUILD_NUMBER
+
       - name: Trigger component tests
         if: inputs.component_test_project != ''
         id: trigger_component_tests
@@ -297,26 +317,6 @@ jobs:
             PROFILE="-P release"
           fi
           jfrog mvn -B -e $PROFILE -DskipTests -Dmaven.test.skip=true deploy
-
-      - name: Promote Release Build
-        if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        shell: bash
-        env:
-          JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
-          JFROG_CLI_BUILD_NUMBER: ${{ steps.resolve_version.outputs.resolved_version }}
-        run: |
-          echo "Delaying promote to ensure all artifacts are available in Artifactory before promotion."
-          sleep 15
-          jfrog rt build-promote $JFROG_CLI_BUILD_NAME $JFROG_CLI_BUILD_NUMBER
-
-      - name: Promote Snapshot Build
-        if: inputs.is_release != true && !startsWith(github.ref, 'refs/heads/dependabot')
-        shell: bash
-        env:
-          JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
-          JFROG_CLI_BUILD_NUMBER: ${{ steps.resolve_version.outputs.resolved_version }}
-        run: |
-          jfrog rt build-promote $JFROG_CLI_BUILD_NAME $JFROG_CLI_BUILD_NUMBER
 
       - name: Release - Set next snapshot version
         if: inputs.is_release == true && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
