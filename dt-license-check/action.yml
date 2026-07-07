@@ -145,7 +145,37 @@ runs:
         fi
 
         TOTAL_COMPONENTS=$(jq 'length' "$COMPONENTS_FILE")
-        UNKNOWN_LICENSE_COUNT=$(jq '[.[] | select(((.resolvedLicense.licenseId // .license // "") | tostring | length) == 0)] | length' "$COMPONENTS_FILE")
+        NORMALIZED_FILE=$(mktemp)
+        jq '
+          def norm_category(value):
+            if (value | type) != "string" then
+              "Unknown"
+            else
+              (value | ascii_downcase) as $v
+              | if ($v | contains("non-commercial")) then "Non-Commercial"
+                elif ($v | contains("weak copyleft")) then "Weak Copyleft"
+                elif ($v | contains("copyleft")) then "Copyleft"
+                elif ($v | contains("permissive")) then "Permissive"
+                else "Unknown"
+                end
+            end;
+
+          map({
+            name: (.name // "UNKNOWN_COMPONENT"),
+            version: (.version // "UNKNOWN_VERSION"),
+            license: (.resolvedLicense.licenseId // .license // "UNKNOWN_LICENSE"),
+            category: norm_category(
+              .resolvedLicense.licenseGroup.name
+              // .resolvedLicense.licenseGroup
+              // .resolvedLicense.group
+              // .licenseGroup.name
+              // .licenseGroup
+              // "Unknown"
+            )
+          })
+        ' "$COMPONENTS_FILE" > "$NORMALIZED_FILE"
+
+        UNKNOWN_LICENSE_COUNT=$(jq '[.[] | select(.license == "UNKNOWN_LICENSE")] | length' "$NORMALIZED_FILE")
 
         echo "total_components=$TOTAL_COMPONENTS" >> "$GITHUB_OUTPUT"
         echo "unknown_license_count=$UNKNOWN_LICENSE_COUNT" >> "$GITHUB_OUTPUT"
@@ -154,26 +184,30 @@ runs:
 
         {
           echo ""
-          echo "### Dependency-Track License Inventory - ${DT_PROJECT_NAME} (${DT_PROJECT_VERSION})"
+          echo "### Dependency-Track License Check (Warning Only) - ${DT_PROJECT_NAME} (${DT_PROJECT_VERSION})"
           echo ""
           echo "- Project UUID: ${DT_PROJECT_UUID}"
           echo "- Total components: ${TOTAL_COMPONENTS}"
           echo "- Unknown licenses: ${UNKNOWN_LICENSE_COUNT}"
+          echo "- Mode: Warning only (pipeline does not fail)"
           echo "- Project: [View in Dependency-Track](${PROJECT_URL})"
           echo ""
-          echo "| License | Components |"
-          echo "|---------|-----------:|"
+          echo "| Category | License | Components | Instruction |"
+          echo "|----------|---------|-----------:|-------------|"
           jq -r '
-            map({
-              name: (.name // "UNKNOWN_COMPONENT"),
-              license: (.resolvedLicense.licenseId // .license // "UNKNOWN_LICENSE")
-            })
-            | sort_by(.license, .name)
-            | group_by(.license)
-            | sort_by(.[0].license)
+            def instruction(category; license):
+              if (license == "UNKNOWN_LICENSE" or category == "Unknown") then "Must be classified in Dependency-Track"
+              elif category == "Non-Commercial" then "Approval required"
+              elif category == "Copyleft" then "Escalate and review before release"
+              elif category == "Weak Copyleft" then "Review obligations"
+              else "No action needed"
+              end;
+
+            sort_by(.category, .license, .name)
+            | group_by([.category, .license])
             | .[]
-            | "| " + .[0].license + " | " + (length | tostring) + " |"
-          ' "$COMPONENTS_FILE"
+            | "| " + .[0].category + " | " + .[0].license + " | " + (length | tostring) + " | " + instruction(.[0].category; .[0].license) + " |"
+          ' "$NORMALIZED_FILE"
           echo ""
           echo "#### Components By License"
         } >> "$GITHUB_STEP_SUMMARY"
@@ -185,20 +219,26 @@ runs:
 
         if [[ "$TOTAL_COMPONENTS" -le "$DETAIL_LIMIT" ]]; then
           jq -r '
-            map({
-              name: (.name // "UNKNOWN_COMPONENT"),
-              license: (.resolvedLicense.licenseId // .license // "UNKNOWN_LICENSE")
-            })
-            | sort_by(.license, .name)
-            | group_by(.license)
-            | sort_by(.[0].license)
+            def instruction(category; license):
+              if (license == "UNKNOWN_LICENSE" or category == "Unknown") then "Must be classified in Dependency-Track"
+              elif category == "Non-Commercial" then "Approval required"
+              elif category == "Copyleft" then "Escalate and review before release"
+              elif category == "Weak Copyleft" then "Review obligations"
+              else "No action needed"
+              end;
+
+            sort_by(.category, .license, .name)
+            | group_by([.category, .license])
             | .[]
-            | "\\n##### " + .[0].license + " (" + (length | tostring) + ")\\n" + (map("- " + .name) | unique | join("\\n"))
-          ' "$COMPONENTS_FILE" >> "$GITHUB_STEP_SUMMARY"
+            | "\\n<details>\\n<summary>" + .[0].category + " | " + .[0].license + " (" + (length | tostring) + ")</summary>\\n\\n"
+              + (map("- " + .name + " (" + .version + ")") | unique | join("\\n"))
+              + "\\n\\nInstruction: " + instruction(.[0].category; .[0].license) + "\\n\\n</details>"
+          ' "$NORMALIZED_FILE" >> "$GITHUB_STEP_SUMMARY"
         else
           {
             echo ""
-            echo "> Detailed component list omitted because total components (${TOTAL_COMPONENTS}) exceeds max_detail_rows (${DETAIL_LIMIT})."
+            echo "> Detailed per-component list omitted because total components (${TOTAL_COMPONENTS}) exceeds max_detail_rows (${DETAIL_LIMIT})."
+            echo "> Increase max_detail_rows to include expandable component sections in the summary."
           } >> "$GITHUB_STEP_SUMMARY"
         fi
 
@@ -206,4 +246,4 @@ runs:
           echo "::warning::DT license check: ${UNKNOWN_LICENSE_COUNT} component(s) have unknown licenses in ${DT_PROJECT_NAME}"
         fi
 
-        rm -f "$COMPONENTS_FILE"
+        rm -f "$NORMALIZED_FILE" "$COMPONENTS_FILE"
