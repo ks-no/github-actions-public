@@ -1,0 +1,209 @@
+name: 'Dependency License Check'
+description: >
+  Fetches Dependency-Track components for one project and posts a grouped
+  license inventory to the GitHub Job Summary. Fails softly.
+
+inputs:
+  dependency_track_api_key:
+    description: 'API key for Dependency-Track (PORTFOLIO_MANAGEMENT permission).'
+    required: true
+  project_name:
+    description: 'Dependency-Track project name (typically github.event.repository.name).'
+    required: true
+  project_version:
+    description: 'Dependency-Track project version (environment marker, e.g. main or prod).'
+    required: false
+    default: 'main'
+  project_uuid:
+    description: 'Optional pre-resolved project UUID. If provided, skips the project lookup.'
+    required: false
+    default: ''
+  dependency_track_base_url:
+    description: 'Dependency-Track base URL (HTTPS only).'
+    required: false
+    default: 'https://dt.fiks.dev.ks.no'
+  max_detail_rows:
+    description: 'Maximum number of component rows to include in detailed summary output.'
+    required: false
+    default: '400'
+
+outputs:
+  project_uuid:
+    description: 'Resolved project UUID used for this report.'
+    value: ${{ steps.resolve_project.outputs.project_uuid }}
+  total_components:
+    description: 'Total number of components scanned for this project.'
+    value: ${{ steps.scan.outputs.total_components }}
+  unknown_license_count:
+    description: 'Number of components with unknown license classification.'
+    value: ${{ steps.scan.outputs.unknown_license_count }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve DT project
+      id: resolve_project
+      shell: bash
+      env:
+        DT_API_KEY: ${{ inputs.dependency_track_api_key }}
+        DT_PROJECT_NAME: ${{ inputs.project_name }}
+        DT_PROJECT_VERSION: ${{ inputs.project_version }}
+        DT_PROJECT_UUID_INPUT: ${{ inputs.project_uuid }}
+        DT_BASE_URL_INPUT: ${{ inputs.dependency_track_base_url }}
+        DT_RETRY_COUNT: '3'
+        DT_RETRY_DELAY_SECONDS: '2'
+        DT_WARNING_PREFIX: 'DT license check'
+      run: |
+        set -euo pipefail
+        bash "${GITHUB_ACTION_PATH}/../resolve-dt-project/resolve-project.sh"
+
+    - name: Scan DT project components for licenses
+      id: scan
+      shell: bash
+      env:
+        DT_API_KEY: ${{ inputs.dependency_track_api_key }}
+        DT_PROJECT_NAME: ${{ inputs.project_name }}
+        DT_PROJECT_VERSION: ${{ inputs.project_version }}
+        DT_PROJECT_UUID: ${{ steps.resolve_project.outputs.project_uuid }}
+        DT_PROJECT_RESOLVED: ${{ steps.resolve_project.outputs.resolved }}
+        DT_BASE_URL: ${{ steps.resolve_project.outputs.base_url }}
+        MAX_DETAIL_ROWS: ${{ inputs.max_detail_rows }}
+      run: |
+        set -euo pipefail
+
+        warn_and_exit() {
+          echo "total_components=0" >> "$GITHUB_OUTPUT"
+          echo "unknown_license_count=0" >> "$GITHUB_OUTPUT"
+          echo "::warning::DT license check: $1"
+          exit 0
+        }
+
+        trap 'warn_and_exit "Unexpected error while generating license inventory."' ERR
+
+        if [[ "$DT_PROJECT_RESOLVED" != "true" || -z "$DT_PROJECT_UUID" ]]; then
+          warn_and_exit "Project could not be resolved; skipping license inventory."
+        fi
+
+        COMPONENTS_FILE=$(mktemp)
+        PAGE_SIZE=100
+        PAGE_NUMBER=1
+        MAX_PAGES=10000
+        PREV_PAGE_SIGNATURE=""
+
+        echo '[]' > "$COMPONENTS_FILE"
+
+        while [[ "$PAGE_NUMBER" -le "$MAX_PAGES" ]]; do
+          PAGE_FILE=$(mktemp)
+
+          HTTP_CODE=$(curl -sS -o "$PAGE_FILE" -w '%{http_code}' \
+            -H "X-Api-Key: $DT_API_KEY" \
+            "$DT_BASE_URL/api/v1/component/project/$DT_PROJECT_UUID?pageNumber=$PAGE_NUMBER&pageSize=$PAGE_SIZE") || true
+
+          if ! [[ "$HTTP_CODE" =~ ^[0-9]{3}$ ]]; then
+            rm -f "$PAGE_FILE" "$COMPONENTS_FILE"
+            warn_and_exit "Failed to fetch components (no HTTP response)."
+          fi
+
+          if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
+            rm -f "$PAGE_FILE" "$COMPONENTS_FILE"
+            warn_and_exit "Failed to fetch components (HTTP $HTTP_CODE)."
+          fi
+
+          PAGE_COUNT=$(jq 'length' "$PAGE_FILE" 2>/dev/null || echo "0")
+          if [[ "$PAGE_COUNT" == "0" ]]; then
+            rm -f "$PAGE_FILE"
+            break
+          fi
+
+          PAGE_SIGNATURE=$(jq -c 'map([(.uuid // .bomRef // .name // ""), (.version // "")])' "$PAGE_FILE" 2>/dev/null || echo "")
+          if [[ -z "$PAGE_SIGNATURE" ]]; then
+            rm -f "$PAGE_FILE" "$COMPONENTS_FILE"
+            warn_and_exit "Failed to parse component page payload."
+          fi
+
+          if [[ "$PAGE_SIGNATURE" == "$PREV_PAGE_SIGNATURE" ]]; then
+            rm -f "$PAGE_FILE"
+            echo "::warning::DT license check: Stopping pagination due to duplicate page payload at page $PAGE_NUMBER."
+            break
+          fi
+
+          PREV_PAGE_SIGNATURE="$PAGE_SIGNATURE"
+
+          jq -s '.[0] + .[1]' "$COMPONENTS_FILE" "$PAGE_FILE" > "${COMPONENTS_FILE}.next"
+          mv "${COMPONENTS_FILE}.next" "$COMPONENTS_FILE"
+          rm -f "$PAGE_FILE"
+
+          if [[ "$PAGE_COUNT" -lt "$PAGE_SIZE" ]]; then
+            break
+          fi
+
+          PAGE_NUMBER=$((PAGE_NUMBER + 1))
+        done
+
+        if [[ "$PAGE_NUMBER" -gt "$MAX_PAGES" ]]; then
+          echo "::warning::DT license check: Stopping pagination after MAX_PAGES=${MAX_PAGES}."
+        fi
+
+        TOTAL_COMPONENTS=$(jq 'length' "$COMPONENTS_FILE")
+        UNKNOWN_LICENSE_COUNT=$(jq '[.[] | select(((.resolvedLicense.licenseId // .license // "") | tostring | length) == 0)] | length' "$COMPONENTS_FILE")
+
+        echo "total_components=$TOTAL_COMPONENTS" >> "$GITHUB_OUTPUT"
+        echo "unknown_license_count=$UNKNOWN_LICENSE_COUNT" >> "$GITHUB_OUTPUT"
+
+        PROJECT_URL="$DT_BASE_URL/projects/$DT_PROJECT_UUID"
+
+        {
+          echo ""
+          echo "### Dependency-Track License Inventory - ${DT_PROJECT_NAME} (${DT_PROJECT_VERSION})"
+          echo ""
+          echo "- Project UUID: ${DT_PROJECT_UUID}"
+          echo "- Total components: ${TOTAL_COMPONENTS}"
+          echo "- Unknown licenses: ${UNKNOWN_LICENSE_COUNT}"
+          echo "- Project: [View in Dependency-Track](${PROJECT_URL})"
+          echo ""
+          echo "| License | Components |"
+          echo "|---------|-----------:|"
+          jq -r '
+            map({
+              name: (.name // "UNKNOWN_COMPONENT"),
+              license: (.resolvedLicense.licenseId // .license // "UNKNOWN_LICENSE")
+            })
+            | sort_by(.license, .name)
+            | group_by(.license)
+            | sort_by(.[0].license)
+            | .[]
+            | "| " + .[0].license + " | " + (length | tostring) + " |"
+          ' "$COMPONENTS_FILE"
+          echo ""
+          echo "#### Components By License"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        DETAIL_LIMIT="$MAX_DETAIL_ROWS"
+        if ! [[ "$DETAIL_LIMIT" =~ ^[0-9]+$ ]]; then
+          DETAIL_LIMIT=400
+        fi
+
+        if [[ "$TOTAL_COMPONENTS" -le "$DETAIL_LIMIT" ]]; then
+          jq -r '
+            map({
+              name: (.name // "UNKNOWN_COMPONENT"),
+              license: (.resolvedLicense.licenseId // .license // "UNKNOWN_LICENSE")
+            })
+            | sort_by(.license, .name)
+            | group_by(.license)
+            | sort_by(.[0].license)
+            | .[]
+            | "\\n##### " + .[0].license + " (" + (length | tostring) + ")\\n" + (map("- " + .name) | unique | join("\\n"))
+          ' "$COMPONENTS_FILE" >> "$GITHUB_STEP_SUMMARY"
+        else
+          {
+            echo ""
+            echo "> Detailed component list omitted because total components (${TOTAL_COMPONENTS}) exceeds max_detail_rows (${DETAIL_LIMIT})."
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        if [[ "$UNKNOWN_LICENSE_COUNT" -gt 0 ]]; then
+          echo "::warning::DT license check: ${UNKNOWN_LICENSE_COUNT} component(s) have unknown licenses in ${DT_PROJECT_NAME}"
+        fi
+
+        rm -f "$COMPONENTS_FILE"
