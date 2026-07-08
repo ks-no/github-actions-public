@@ -1,0 +1,25 @@
+name: Post Github Summary
+description: 'Post a summary comment on the actions performed in the workflow.'
+inputs:
+  git_tag:
+    description: 'The git tag of the release.'
+    required: true
+  helm_chart_url:
+    description: 'The URL of the published Helm chart.'
+    required: true
+  helm_chart_prov_url:
+    description: 'The URL of the published Helm chart provenance file.'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+  - name: Generate Summary
+    shell: bash
+    run: |
+      echo "**Deployment Status:** Successful" >> $GITHUB_STEP_SUMMARY
+      echo "| Component | Value |" >> $GITHUB_STEP_SUMMARY
+      echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+      echo "| Git tag | ${{ inputs.git_tag }} |" >> $GITHUB_STEP_SUMMARY
+      echo "| Helm Chart | ${{ inputs.helm_chart_url }} |" >> $GITHUB_STEP_SUMMARY
+      echo "| Helm Chart Prov | ${{ inputs.helm_chart_prov_url }} |" >> $GITHUB_STEP_SUMMARY

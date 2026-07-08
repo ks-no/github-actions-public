@@ -166,7 +166,7 @@ jobs:
           release_body: ${{ steps.prepare_release.outputs.release_body }}
 
       - name: 'Github Summary'
-        uses: ks-no/github-actions/post-github-summary@main
+        uses: ks-no/github-actions-public/post-github-summary@main
         with:
           git_tag: ${{ steps.build_java.outputs.git_tag }}
           helm_chart_url: ${{ steps.publish_helm.outputs.helm_chart_url }}
