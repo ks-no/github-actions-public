@@ -131,7 +131,7 @@ jobs:
           helm_folder: ${{ inputs.helm_folder || inputs.helm_chart }}
 
       - name: 'Build and Push Docker Image'
-        uses: ks-no/github-actions/publish-docker@main
+        uses: ks-no/github-actions-public/publish-docker@main
         with:
           version: ${{ steps.build_java.outputs.git_tag }}
           is_release: ${{ inputs.is_release }}
