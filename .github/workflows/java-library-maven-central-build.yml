@@ -174,15 +174,6 @@ jobs:
         run: |
           jfrog mvn -U -B -P snapshot validate
 
-      - name: Snapshot - Set unique version
-        if: inputs.is_release != true
-        shell: bash
-        run: |
-          # Sets the git-describe-based version (e.g. 3.6.3-15-gb3005e91) so the deployed
-          # artifact matches the version passed to component tests and the build-info number.
-          # Local to the workspace only - nothing is committed or pushed.
-          jfrog mvn versions:set -DnewVersion=${{ steps.resolve_version.outputs.resolved_version }} -DgenerateBackupPoms=false
-
       - name: Release - Set new version and tag
         if: inputs.is_release == true && (startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master'))
         shell: bash
@@ -216,6 +207,16 @@ jobs:
         run: |
           jfrog rt build-publish
 
+      - name: Read POM version for component tests
+        id: pom_version_for_tests
+        if: inputs.component_test_project != ''
+        shell: bash
+        run: |
+          # The deployed artifact carries the POM version (e.g. 3.6.4-SNAPSHOT for snapshot
+          # builds, the resolved version for releases), so that is what component tests must use.
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Trigger component tests
         if: inputs.component_test_project != ''
         id: trigger_component_tests
@@ -226,7 +227,7 @@ jobs:
             const intOwner = 'ks-no';
             const intRepo = '${{ inputs.component_test_project }}';
             const workflowId = 'component-test.yml';
-            const componentVersion = '${{ inputs.component_test_version }}' || '${{ steps.resolve_version.outputs.resolved_version }}';
+            const componentVersion = '${{ inputs.component_test_version }}' || '${{ steps.pom_version_for_tests.outputs.version }}';
             const clientOwner = context.repo.owner;
             const clientRepo  = context.repo.repo;
             const clientSha   = context.sha;
