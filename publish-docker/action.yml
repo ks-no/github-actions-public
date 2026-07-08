@@ -1,0 +1,57 @@
+name: 'Publish Docker Image with Jib, this is mostly for the Service pipeline'
+description: 'Builds and publishes a Docker image to Artifactory.'
+inputs:
+  version:
+    description: 'The version tag for the Docker image.' #This might not be correct
+    required: true
+  image_name:
+    description: 'The name of the Docker image.'
+    required: true
+  tags:
+    description: 'A comma-separated string of tags for the Docker image.'
+    required: true
+  is_release:
+    description: 'Set to true for a release build, false for a snapshot build.'
+    required: true
+    default: 'false'
+  artifactory_username:
+    description: 'The username for Artifactory.'
+    required: true
+  artifactory_password:
+    description: 'The password for Artifactory.'
+    required: true
+  path:
+    description: 'The path to the directory containing the pom.xml.'
+    required: false
+    default: '.'
+  java_version:
+    description: 'The Java version to use for the build.'
+    required: false
+    default: 'java21'
+
+runs:
+  using: "composite"
+  steps:
+
+    - name: Set Maven profile
+      id: set_vars
+      shell: bash
+      run: |
+        if [[ "${{ inputs.is_release }}" == "true" ]]; then
+          echo "profile=install-release" >> $GITHUB_OUTPUT
+        else
+          echo "profile=install-snapshot" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Build and Push with Jib
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      env:
+        IMAGE_TAG: ${{ inputs.version }}
+      run: |
+        jfrog mvn -B jib:build@${{ steps.set_vars.outputs.profile }} \
+          -Djib.to.auth.username=${{ inputs.artifactory_username }} \
+          -Djib.to.auth.password=${{ inputs.artifactory_password }} \
+          -Djib.console=plain \
+          -Djib.useOnlyProjectCache=true \
+          -DskipTests
