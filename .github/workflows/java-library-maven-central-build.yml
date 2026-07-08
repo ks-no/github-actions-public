@@ -150,10 +150,20 @@ jobs:
 
       - name: Use Maven settings.xml
         shell: bash
-        if: inputs.maven_settings_xml != ''
+        if: inputs.maven_settings_xml != '' || secrets.SONATYPE_OSSRH_SETTINGS_XML != ''
+        env:
+          # Prefer the explicit input, fall back to the SONATYPE_OSSRH_SETTINGS_XML secret.
+          # The settings must contain the server (e.g. portal-ossrh) that the
+          # central-publishing-maven-plugin resolves credentials from - the plugin looks it
+          # up even when publishing is skipped, so it must be present during the build step.
+          MAVEN_SETTINGS_XML: ${{ inputs.maven_settings_xml != '' && inputs.maven_settings_xml || secrets.SONATYPE_OSSRH_SETTINGS_XML }}
         run: |
           mkdir -p ~/.m2
-          echo "${{ inputs.maven_settings_xml }}" | base64 -d > ~/.m2/settings.xml
+          if [[ "$MAVEN_SETTINGS_XML" == \<* ]]; then
+            printf '%s' "$MAVEN_SETTINGS_XML" > ~/.m2/settings.xml
+          else
+            echo "$MAVEN_SETTINGS_XML" | base64 -d > ~/.m2/settings.xml
+          fi
 
       - name: Snapshot - Verify POM
         if: inputs.is_release != true
