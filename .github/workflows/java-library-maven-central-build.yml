@@ -150,7 +150,6 @@ jobs:
 
       - name: Use Maven settings.xml
         shell: bash
-        if: inputs.maven_settings_xml != '' || secrets.SONATYPE_OSSRH_SETTINGS_XML != ''
         env:
           # Prefer the explicit input, fall back to the SONATYPE_OSSRH_SETTINGS_XML secret.
           # The settings must contain the server (e.g. portal-ossrh) that the
@@ -158,6 +157,10 @@ jobs:
           # up even when publishing is skipped, so it must be present during the build step.
           MAVEN_SETTINGS_XML: ${{ inputs.maven_settings_xml != '' && inputs.maven_settings_xml || secrets.SONATYPE_OSSRH_SETTINGS_XML }}
         run: |
+          if [[ -z "$MAVEN_SETTINGS_XML" ]]; then
+            echo "No Maven settings.xml provided, skipping."
+            exit 0
+          fi
           mkdir -p ~/.m2
           if [[ "$MAVEN_SETTINGS_XML" == \<* ]]; then
             printf '%s' "$MAVEN_SETTINGS_XML" > ~/.m2/settings.xml
