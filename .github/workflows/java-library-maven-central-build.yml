@@ -207,15 +207,19 @@ jobs:
         run: |
           jfrog rt build-publish
 
-      - name: Read POM version for component tests
+      - name: Read POM version
         id: pom_version_for_tests
-        if: inputs.component_test_project != ''
         shell: bash
         run: |
           # The deployed artifact carries the POM version (e.g. 3.6.4-SNAPSHOT for snapshot
           # builds, the resolved version for releases), so that is what component tests must use.
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          {
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Artifactory-versjon | \`$VERSION\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Trigger component tests
         if: inputs.component_test_project != ''
