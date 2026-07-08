@@ -181,8 +181,10 @@ jobs:
           JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
           JFROG_CLI_BUILD_NUMBER: ${{ steps.resolve_version.outputs.resolved_version }}
         run: |
-          # Deploys to maven-local-staging (configured via jfrog mvn-config in prepare-the-frog)
-          jfrog mvn -DdeployAtEnd=true -U -B clean deploy
+          # Deploys to maven-local-staging (configured via jfrog mvn-config in prepare-the-frog).
+          # skipPublishing disables the central-publishing-maven-plugin injected from the parent POM;
+          # Maven Central publishing happens in the 'Deploy to Maven Central' step, not here.
+          jfrog mvn -DdeployAtEnd=true -DskipPublishing=true -U -B clean deploy
 
       - name: Publish Build info
         shell: bash
