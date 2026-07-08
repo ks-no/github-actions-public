@@ -144,7 +144,7 @@ jobs:
 
       - name: 'Deploy Application'
         if: inputs.autodeploy == true && inputs.helm_chart != ''
-        uses: ks-no/github-actions/deploy@main
+        uses: ks-no/github-actions-public/deploy@main
         with:
           helm_chart: ${{ inputs.helm_chart }}
           environment: ${{ inputs.environment }}
