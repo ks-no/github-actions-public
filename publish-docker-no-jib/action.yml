@@ -25,12 +25,15 @@ inputs:
   artifactory_password:
     description: 'Artifactory password'
     required: true
+  npmrc:
+    description: 'Full .npmrc content (one or more registry auth lines) exposed to the build as a secret'
+    required: false
 
 runs:
   using: 'composite'
   steps:
     - name: Checkout
-      uses: ks-no/github-actions-public/checkout@main
+      uses: ks-no/github-actions/checkout@main
 
     - name: Setup JFrog CLI
       uses: jfrog/setup-jfrog-cli@86dacb6974c66cc99e7651e1205f6581aaddba9a #v4.10.0
@@ -60,11 +63,25 @@ runs:
           echo "repo=docker-local-snapshots.artifactory.fiks.ks.no" >> $GITHUB_OUTPUT
         fi
 
+    - name: Log in to Artifactory (for base image pull)
+      uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 #v4.4.0
+      with:
+        registry: docker-all.artifactory.fiks.ks.no
+        username: ${{ inputs.artifactory_username }}
+        password: ${{ inputs.artifactory_password }}
+
     - name: Build Docker image
       id: build_image
       shell: bash
       run: |
-        docker build -t ${{ inputs.image_name }} -f ${{ inputs.dockerfile }} . --no-cache
+        docker build \
+          -t ${{ inputs.image_name }} \
+          -f ${{ inputs.dockerfile }} \
+          --secret id=npmrc,env=NPMRC \
+          --no-cache \
+          .
+      env:
+        NPMRC: ${{ inputs.npmrc }}
 
     - name: Tag and Push Docker image
       shell: bash
