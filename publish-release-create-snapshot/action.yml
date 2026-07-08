@@ -1,0 +1,48 @@
+name: 'Create Next Snapshot Version'
+description: 'Creates the next snapshot version after a release.'
+inputs:
+  artifactory_username:
+    description: 'The username for Artifactory'
+    required: true
+  artifactory_password:
+    description: 'The password for Artifactory'
+    required: true
+  version:
+    description: 'The release version that was just created (e.g., 1.2.3)'
+    required: true
+  ks_github_app_token:
+    description: 'Token for checking out code and pushing changes'
+    required: true
+  release_body:
+    description: 'The body of release text for actual release'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+
+    - name: Set next snapshot version
+      shell: bash
+      run: |
+        IFS='.' read -r major minor patch <<< "${{ inputs.version }}"
+        next_patch=$((patch + 1))
+        next_snapshot_version="$major.$minor.$next_patch-SNAPSHOT"
+        echo "Next snapshot version will be $next_snapshot_version"
+        jfrog mvn versions:set -DnewVersion=$next_snapshot_version -DgenerateBackupPoms=false
+
+    - name: Commit next snapshot version
+      shell: bash
+      run: |
+        git commit -am "Bump to next snapshot version"
+        git push --follow-tags
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe #v2.6.1
+      env:
+        GITHUB_TOKEN: ${{ inputs.ks_github_app_token }}
+      with:
+        tag_name: ${{ inputs.version }}
+        name: "Release ${{ inputs.version }}"
+        body: ${{ inputs.release_body }}
+        draft: false
+        prerelease: false

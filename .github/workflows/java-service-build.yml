@@ -157,7 +157,7 @@ jobs:
 
       - name: 'Publish, Release and Create Next Snapshot'
         if: inputs.is_release == true
-        uses: ks-no/github-actions/publish-release-create-snapshot@main
+        uses: ks-no/github-actions-public/publish-release-create-snapshot@main
         with:
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
