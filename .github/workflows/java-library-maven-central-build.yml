@@ -177,15 +177,12 @@ jobs:
 
       - name: Build
         shell: bash
+        env:
+          JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
+          JFROG_CLI_BUILD_NUMBER: ${{ steps.resolve_version.outputs.resolved_version }}
         run: |
-          if [[ "${{ inputs.is_release }}" == "true" && 
-                ( "${GITHUB_REF}" == "refs/heads/main" || "${GITHUB_REF}" == "refs/heads/master" ) ]]; then
-            export JFROG_CLI_BUILD_NAME="ks-maven"
-          else
-            export JFROG_CLI_BUILD_NAME="ks-maven-snapshot"
-          fi
-          export JFROG_CLI_BUILD_NUMBER="${{ github.run_number }}"
-          jfrog mvn -DinstallAtEnd=true -U -B clean install
+          # Deploys to maven-local-staging (configured via jfrog mvn-config in prepare-the-frog)
+          jfrog mvn -DdeployAtEnd=true -U -B clean deploy
 
       - name: Publish Build info
         shell: bash
@@ -194,26 +191,6 @@ jobs:
           JFROG_CLI_BUILD_NUMBER: ${{ steps.resolve_version.outputs.resolved_version }}
         run: |
           jfrog rt build-publish
-
-      - name: Promote Release Build
-        if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        shell: bash
-        env:
-          JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
-          JFROG_CLI_BUILD_NUMBER: ${{ steps.resolve_version.outputs.resolved_version }}
-        run: |
-          echo "Delaying promote to ensure all artifacts are available in Artifactory before promotion."
-          sleep 15
-          jfrog rt build-promote $JFROG_CLI_BUILD_NAME $JFROG_CLI_BUILD_NUMBER
-
-      - name: Promote Snapshot Build
-        if: inputs.is_release != true && !startsWith(github.ref, 'refs/heads/dependabot')
-        shell: bash
-        env:
-          JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
-          JFROG_CLI_BUILD_NUMBER: ${{ steps.resolve_version.outputs.resolved_version }}
-        run: |
-          jfrog rt build-promote $JFROG_CLI_BUILD_NAME $JFROG_CLI_BUILD_NUMBER
 
       - name: Trigger component tests
         if: inputs.component_test_project != ''
@@ -288,6 +265,26 @@ jobs:
             if (conclusion !== 'success') {
               core.setFailed(`Component tests did not pass (conclusion: ${conclusion})`);
             }
+      - name: Promote Release Build
+        if: inputs.is_release == true && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        shell: bash
+        env:
+          JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
+          JFROG_CLI_BUILD_NUMBER: ${{ steps.resolve_version.outputs.resolved_version }}
+        run: |
+          echo "Delaying promote to ensure all artifacts are available in Artifactory before promotion."
+          sleep 15
+          jfrog rt build-promote "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER" ks-maven
+
+      - name: Promote Snapshot Build
+        if: inputs.is_release != true && !startsWith(github.ref, 'refs/heads/dependabot')
+        shell: bash
+        env:
+          JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
+          JFROG_CLI_BUILD_NUMBER: ${{ steps.resolve_version.outputs.resolved_version }}
+        run: |
+          jfrog rt build-promote "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER" ks-maven-snapshot
+
 
       - name: Generate SBOM
         shell: bash
