@@ -1,0 +1,74 @@
+name: 'Create and Tag Release'
+description: 'Sets the Maven project version, commits, and creates a Git tag for a release.'
+inputs:
+  version:
+    description: 'The release version to set (e.g., 1.2.3)'
+    required: true
+  java_version:
+    description: 'The Java version to use for setting the version (e.g., java17)'
+    required: true
+    default: 'java21'
+  ks_github_app_token:
+    description: 'Token for checking out code and pushing changes'
+    required: true
+  artifactory_username:
+    description: 'The username for Artifactory'
+    required: true
+  artifactory_password:
+    description: 'The password for Artifactory'
+    required: true
+  reviewer:
+    description: 'Reviewer for the release PR'
+    required: false
+    default: ''
+
+outputs:
+  release_body:
+    description: 'The body of release text for actual release'
+    value: ${{ steps.generate_body.outputs.release_body }}
+
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Java
+      shell: bash
+      run: |
+        JAVA_VERSION_CMD="${{ inputs.java_version }}"
+        if [[ "$JAVA_VERSION_CMD" =~ ^[0-9]+$ ]]; then
+          JAVA_VERSION_CMD="java$JAVA_VERSION_CMD"
+        fi
+        $JAVA_VERSION_CMD
+
+    - name: Generate release notes
+      id: generate_body
+      uses: ks-no/github-actions-public/generate-release-notes@main
+      with:
+        github-token: ${{ inputs.ks_github_app_token }}
+        actor: ${{ github.actor }}
+        reviewer: ${{ inputs.reviewer }}
+
+    - name: Set release version
+      shell: bash
+      run: jfrog mvn versions:set -DnewVersion=${{ inputs.version }} -DgenerateBackupPoms=false
+
+    - name: Commit release version
+      id: commit_step
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.ks_github_app_token }}
+        RELEASE_BODY: ${{ steps.generate_body.outputs.release_body }}
+      run: |
+        git commit -a -m "Release ${{ inputs.version }}" -m "$RELEASE_BODY"
+        COMMIT_MESSAGE=$(git log -1 --pretty=%B)
+        EOF_MARKER=$(uuidgen)
+        echo "commit_message<<$EOF_MARKER" >> $GITHUB_OUTPUT
+        echo "$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
+        echo "$EOF_MARKER" >> $GITHUB_OUTPUT
+
+    - name: Create Git tag
+      shell: bash
+      env:
+        COMMIT_MESSAGE: ${{ steps.commit_step.outputs.commit_message }}
+      run: |
+        git tag -a ${{ inputs.version }} -m "$COMMIT_MESSAGE"
