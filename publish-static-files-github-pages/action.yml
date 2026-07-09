@@ -1,0 +1,77 @@
+name: 'Publish static files to GitHub Pages'
+description: 'Publishes static files to GitHub Pages folder.'
+inputs:
+  ks_github_app_id:
+    description: 'ID for the GitHub App.'
+    required: true
+  ks_github_app_private_key:
+    description: 'Private key for accessing the GitHub App.'
+    required: true
+  files_folder:
+    description: 'Folder for files to copy from.'
+    required: true
+  target_folder:
+    description: 'Folder for files to be put in.'
+    required: true
+  recurse:
+    description: 'Whether to include files in subfolders of the files_folder.'
+    required: false
+    default: "false"
+runs:
+  using: "composite"
+  steps:
+    - name: Check out code
+      uses: ks-no/github-actions/checkout@main
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+        submodules: true
+        clean: false
+
+    - name: Set up github app for pushing changes
+      id: setup_github_app
+      uses: ks-no/github-actions-public/setup-github-app@main
+      with:
+        ks_github_app_id: ${{ inputs.ks_github_app_id }}
+        ks_github_app_private_key: ${{ inputs.ks_github_app_private_key }}
+
+    - name: Checkout ks-no.github.io repository
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v6.0.2
+      with:
+        repository: ks-no/ks-no.github.io
+        token: ${{ steps.setup_github_app.outputs.app_token }}
+        path: ks-no.github.io
+        ref: source
+
+    - name: Copy files to ks-no.github.io
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      shell: bash
+      run: |
+        TARGET_DIR="ks-no.github.io/static/${{ inputs.target_folder }}"
+        SRC_DIR="${PWD}/${{ inputs.files_folder }}"
+        if [ ! -d "$SRC_DIR" ]; then
+          echo "Source directory $SRC_DIR does not exist!" >&2
+          exit 1
+        fi
+        rm -rf "$TARGET_DIR"
+        mkdir -p "$TARGET_DIR"
+        if [ "${{ inputs.recurse }}" = "true" ]; then
+          cp -rv "$SRC_DIR"/* "$TARGET_DIR"/
+        else
+          find "$SRC_DIR" -maxdepth 1 -type f -exec cp -v {} "$TARGET_DIR"/ \;
+        fi
+        echo "Files copied: $(find "$TARGET_DIR")"
+
+    - name: Commit and push changes
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      shell: bash
+      run: |
+        cd ks-no.github.io
+        git add static/${{ inputs.target_folder }}
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Updated files in ${{ inputs.target_folder }}"
+          git push origin HEAD:source
+        fi
