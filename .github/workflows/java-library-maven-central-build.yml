@@ -188,7 +188,7 @@ jobs:
         run: |
           jfrog mvn -U -B validate
 
-      - name: Build
+      - name: Build and generate SBOM
         shell: bash
         env:
           JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
@@ -197,7 +197,7 @@ jobs:
           # Deploys to maven-local-staging (configured via jfrog mvn-config in prepare-the-frog).
           # skipPublishing disables the central-publishing-maven-plugin injected from the parent POM;
           # Maven Central publishing happens in the 'Deploy to Maven Central' step, not here.
-          jfrog mvn -DdeployAtEnd=true -DskipPublishing=true -U -B clean deploy
+          jfrog mvn -DdeployAtEnd=true -DskipPublishing=true -U -B clean org.cyclonedx:cyclonedx-maven-plugin:2.7.9:makeAggregateBom deploy
 
       - name: Publish Build info
         shell: bash
@@ -207,15 +207,19 @@ jobs:
         run: |
           jfrog rt build-publish
 
-      - name: Read POM version for component tests
+      - name: Read POM version
         id: pom_version_for_tests
-        if: inputs.component_test_project != ''
         shell: bash
         run: |
           # The deployed artifact carries the POM version (e.g. 3.6.4-SNAPSHOT for snapshot
           # builds, the resolved version for releases), so that is what component tests must use.
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          {
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Artifactory-versjon | \`$VERSION\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Trigger component tests
         if: inputs.component_test_project != ''
@@ -310,12 +314,6 @@ jobs:
         run: |
           jfrog rt build-promote "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER" ks-maven-snapshot
 
-
-      - name: Generate SBOM
-        shell: bash
-        run: |
-          mvn org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -Dcyclonedx.outputFormat=json -Dcyclonedx.outputName=bom -Dcyclonedx.skipNotDeployed=false
-
       - name: Deploy to Maven Central
         if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         shell: bash
@@ -371,4 +369,13 @@ jobs:
         run: |
           git push --follow-tags
 
+      - name: 'SBOM Upload and Report'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: ks-no/github-actions-public/sbom-upload-and-report@main
+        with:
+          dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+          is_release: ${{ inputs.is_release }}
+          project_version: ${{ inputs.is_release == true && 'release' || '' }}
+          artifactory_repository_name: ${{ github.event.repository.name }}
+          artifactory_artifact_version: ${{ steps.build_java.outputs.git_tag }}
 
