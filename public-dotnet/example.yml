@@ -13,7 +13,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
       - name: Build and Publish Package
-        uses: ks-no/github-actions/public-dotnet@main
+        uses: ks-no/github-actions-public/public-dotnet@main
         with:
           project_path: 'Someapp/Someapp.csproj'
           push_to_nuget_org: ${{ github.event.inputs.push_to_nuget_org }}
