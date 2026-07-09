@@ -156,7 +156,7 @@ jobs:
 
       - name: Publish Helm chart
         if: github.event_name != 'pull_request' && inputs.helm_chart != ''
-        uses: ks-no/github-actions/publish-helm@main
+        uses: ks-no/github-actions-public/publish-helm@main
         with:
           chart_name: ${{ inputs.helm_chart }}
           chart_version: ${{ steps.version.outputs.chart_version }}
