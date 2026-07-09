@@ -122,7 +122,7 @@ jobs:
       - name: 'Build and Push Helm'
         if: inputs.helm_chart != ''
         id: publish_helm
-        uses: ks-no/github-actions/publish-helm@main
+        uses: ks-no/github-actions-public/publish-helm@main
         with:
           chart_name: ${{ inputs.helm_chart }}
           chart_version: ${{ steps.build_java.outputs.git_tag }}
