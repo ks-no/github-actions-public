@@ -1,0 +1,114 @@
+name: 'Build and Publish Helm Chart'
+description: 'Builds a Helm chart, substitutes variables, signs it with GPG, and publishes it to Artifactory.'
+inputs:
+  chart_name:
+    description: 'The name of the Helm chart when published'
+    required: true
+  chart_version:
+    description: 'The version of the chart (replaces CHART_VERSION).'
+    required: true
+  image_tag:
+    description: 'The image tag to be set in values.yaml (replaces IMAGE_TAG).'
+    required: true
+  gpg_private_key:
+    description: 'The GPG private key for signing the chart.'
+    required: true
+  project_helm_version:
+    description: 'The version used for the chart package filename (replaces PROJECT_HELM_VERSION). Defaults to chart_version if not set.'
+    required: false
+  artifactory_username:
+    description: 'The username for Artifactory. Only needed if JFrog must be set up.'
+    required: false
+  artifactory_password:
+    description: 'The password for Artifactory. Only needed if JFrog must be set up.'
+    required: false
+  helm_folder:
+    description: 'The folder in repo where the Helm chart is located (default: Set to input chart_name).'
+    required: false
+  need_jfrog_setup:
+    description: 'Whether JFrog CLI has not been set up yet and must be now.'
+    required: false
+    default: 'false'
+
+outputs:
+  helm_chart_url:
+    description: 'The URL of the published Helm chart in Artifactory.'
+    value: ${{ steps.uploads.outputs.helm_chart_url }}
+  helm_chart_prov_url:
+    description: 'The URL of the published Helm chart provenance file in Artifactory.'
+    value: ${{ steps.uploads.outputs.helm_chart_prov_url }}
+
+runs:
+  using: "composite"
+  steps:
+
+    - name: Clean and prepare chart directory
+      shell: bash
+      run: |
+        rm -f target/*.tgz
+        rm -rf target/${{ inputs.chart_name }}
+        mkdir -p target/${{ inputs.chart_name }}
+        cp -rv ${{ inputs.helm_folder || inputs.chart_name }}/* target/${{ inputs.chart_name }}/
+
+    - name: Substitute variables in Helm chart
+      shell: bash
+      env:
+        CHART_VERSION: ${{ inputs.chart_version }}
+        IMAGE_TAG: ${{ inputs.image_tag }}
+        PROJECT_HELM_VERSION: ${{ inputs.project_helm_version || inputs.chart_version }}
+      run: |
+        envsubst < ${{ inputs.helm_folder || inputs.chart_name }}/values.yaml > target/${{ inputs.chart_name }}/values.yaml
+        envsubst < ${{ inputs.helm_folder || inputs.chart_name }}/Chart.yaml > target/${{ inputs.chart_name }}/Chart.yaml
+
+    - name: Import GPG key
+      if: inputs.gpg_private_key != ''
+      shell: bash
+      run: |
+        echo "${{ inputs.gpg_private_key }}" | gpg --import
+
+    - name: Update dependencies if they exist in Chart.yaml
+      shell: bash
+      working-directory: 'target/${{ inputs.chart_name }}'
+      run: |
+        DEPENDENCY_STR=$(grep "^dependencies:" Chart.yaml || echo "")
+        if [[ -n "$DEPENDENCY_STR" || -f "requirements.yaml" ]] ; then
+          helm dependency update
+        fi
+
+    - name: Package Helm chart
+      shell: bash
+      run: |
+        helm package target/${{ inputs.chart_name }} --version ${{ inputs.project_helm_version || inputs.chart_version }}
+
+    - name: Sign Helm chart
+      shell: bash
+      if: inputs.gpg_private_key != ''
+      run: |
+        CHART_FILE="${{ inputs.chart_name }}-${{ inputs.project_helm_version || inputs.chart_version }}.tgz"
+        gpg --detach-sign --armor --local-user 'helm@example.com' --output "$CHART_FILE.prov" "$CHART_FILE"
+
+    - name: Move chart files to target
+      shell: bash
+      run: |
+        mv ${{ inputs.chart_name }}*.tgz target/ # mv ${{ inputs.chart_name }}*.prov target/
+
+    - name: Set up JFrog CLI
+      if: inputs.need_jfrog_setup == 'true'
+      uses: ks-no/github-actions-public/setup-jfrog-cli@main
+      with:
+        artifactory_username: ${{ inputs.artifactory_username }}
+        artifactory_password: ${{ inputs.artifactory_password }}
+
+    - name: Upload Helm chart and provenance to Artifactory
+      shell: bash
+      run: |
+        CHART_FILE="${{ inputs.chart_name }}-${{ inputs.project_helm_version || inputs.chart_version }}.tgz" # PROV_FILE="${CHART_FILE}.prov"
+        cd target
+        jfrog rt upload "$CHART_FILE" "ks-helm/" # jfrog rt upload "$PROV_FILE" "ks-helm/"
+
+    - name: Set output Helm chart URL
+      id: uploads
+      shell: bash
+      run: |
+        echo "helm_chart_url=https://artifactory.fiks.ks.no/artifactory/ks-helm/${{ inputs.chart_name }}-${{ inputs.project_helm_version || inputs.chart_version }}.tgz" >> $GITHUB_OUTPUT
+        echo "helm_chart_prov_url=https://artifactory.fiks.ks.no/artifactory/ks-helm/${{ inputs.chart_name }}-${{ inputs.project_helm_version || inputs.chart_version }}.tgz.prov" >> $GITHUB_OUTPUT
