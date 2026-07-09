@@ -21,7 +21,7 @@ runs:
   using: "composite"
   steps:
     - name: Check out code
-      uses: ks-no/github-actions/checkout@main
+      uses: ks-no/github-actions-public/checkout@main
       with:
         fetch-depth: 0
         fetch-tags: true

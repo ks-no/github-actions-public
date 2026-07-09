@@ -10,10 +10,10 @@ jobs:
     runs-on: [self-hosted, x64]
     steps:
       - name: Checkout repository
-        uses: ks-no/github-actions/checkout@main
+        uses: ks-no/github-actions-public/checkout@main
 
       - name: Publish static files to GitHub Pages
-        uses: ks-no/github-actions/publish-static-files-github-pages@main
+        uses: ks-no/github-actions-public/publish-static-files-github-pages@main
         with:
           files_folder: "source"
           target_folder: "target"
