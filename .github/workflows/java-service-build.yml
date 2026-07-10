@@ -78,36 +78,6 @@ jobs:
       group: ${{ inputs.is_release == true && format('release-{0}', github.repository) || format('autobuild-{0}-{1}', github.repository, github.ref_name) }}
       cancel-in-progress: true
     steps:
-      - name: Delete old folders
-        if: ${{ inputs.dirs_to_delete != null && inputs.dirs_to_delete != '' }}
-        shell: bash
-        env:
-          REPO_NAME: ${{ github.event.repository.name }}
-          DIRS_TO_DELETE: ${{ inputs.dirs_to_delete }}
-        run: |
-          WORK_DIR="/opt/actions-runner/_work/${REPO_NAME}/${REPO_NAME}"
-
-          echo "Folders to delete: ${DIRS_TO_DELETE}"
-
-          IFS=',' read -ra DIRS <<< "$DIRS_TO_DELETE"
-
-          for dir in "${DIRS[@]}"; do
-            # Remove any whitespaces
-            dir="$(echo "$dir" | xargs)"
-
-            # Skip empty values
-            [ -z "$dir" ] && continue
-
-            # Don't allow absolute paths or parent traversal
-            if [[ "$dir" = /* || "$dir" == *".."* ]]; then
-              echo "Not allowed to delete: $dir"
-              continue
-            fi
-
-            echo "Deleting: ${WORK_DIR}/${dir}"
-            sudo rm -rf "${WORK_DIR:?}/${dir}"
-          done
-
       - name: 'Validate version inputs'
         uses: ks-no/github-actions-public/validate-version-inputs@main
         with:
