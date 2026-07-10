@@ -1,0 +1,193 @@
+name: 'Java Build and Deploy reusable workflow'
+description: 'Reusable workflow that orchestrates building and deploying a Java application with KS defaults pre-filled.'
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'The release version to release or deploy (e.g., 1.2.3). Mutually exclusive with semver_increment.'
+        required: false
+        type: string
+      semver_increment:
+        description: 'Select semver increment: "next major", "next minor", or "next patch". Mutually exclusive with version.'
+        required: false
+        type: string
+      is_release:
+        description: 'Set to true for a release build, false for a snapshot build.'
+        required: false
+        type: boolean
+        default: false
+      java_version:
+        description: 'The Java version to use for the build (e.g., java21)'
+        required: false
+        type: string
+        default: 'java21'
+      helm_chart:
+        description: 'The Helm chart name to be published and deployed'
+        required: false
+        type: string
+        default: ''
+      environment:
+        description: 'The environment to deploy to'
+        required: false
+        type: string
+        default: 'dev'
+      path:
+        description: 'Path to the Dockerfile'
+        required: false
+        type: string
+        default: '.'
+      docker_args:
+        description: 'Arguments for the docker build command'
+        required: false
+        type: string
+        default: ''
+      autodeploy:
+        description: 'Set to true to automatically deploy after build'
+        required: false
+        type: boolean
+        default: false
+      reviewer:
+        description: 'Reviewer for the deployment PR'
+        required: false
+        type: string
+        default: ''
+      helm_folder:
+        description: 'The folder in repo where the Helm chart is located (default: set to helm_chart input).'
+        required: false
+        type: string
+        default: ''
+      big_runner:
+        description: 'Whether to use a big runner for the build.'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: write
+  checks: write
+  #enable the below if you want to have zizmor scan output in GHAS security tab
+  #security-events: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ${{ inputs.big_runner && 'x64-large' || fromJSON('["self-hosted", "x64"]') }}
+    timeout-minutes: 40
+    concurrency:
+      group: ${{ inputs.is_release == true && format('release-{0}', github.repository) || format('autobuild-{0}-{1}', github.repository, github.ref_name) }}
+      cancel-in-progress: true
+    steps:
+      - name: 'Validate version inputs'
+        uses: ks-no/github-actions-public/validate-version-inputs@main
+        with:
+          version: ${{ inputs.version }}
+          semver_increment: ${{ inputs.semver_increment }}
+          is_release: ${{ inputs.is_release }}
+
+      - name: 'Set up GitHub App'
+        id: app_token
+        uses: ks-no/github-actions-public/setup-github-app@main
+        with:
+          ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
+          ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+
+      - name: 'Checkout code'
+        uses: ks-no/github-actions-public/checkout@main
+        with:
+          submodules: true
+          token: ${{ steps.app_token.outputs.app_token }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: 'Zizmor Scan'
+        continue-on-error: true
+        uses: ks-no/github-actions-public/zizmor-scan@main
+        with:
+          output_format: 'github' # Use 'sarif' for GHAS Security tab, or 'github' for inline annotations
+
+      - name: 'Resolve version'
+        id: resolve_version
+        uses: ks-no/github-actions-public/complete-version-resolvement@main
+        with:
+          version: ${{ inputs.version }}
+          semver_increment: ${{ inputs.semver_increment }}
+          is_release: ${{ inputs.is_release }}
+
+      - name: 'Prepare JFrog CLI'
+        uses: ks-no/github-actions-public/prepare-the-frog@main
+        with:
+          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+
+      - name: 'Prepare and Tag Release'
+        if: inputs.is_release == true
+        id: prepare_release
+        uses: ks-no/github-actions-public/prepare-and-tag-release@main
+        with:
+          version: ${{ steps.resolve_version.outputs.resolved_version }}
+          java_version: ${{ inputs.java_version }}
+          ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
+          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+          reviewer: ${{ inputs.reviewer }}
+
+      - name: 'Build Java Project'
+        uses: ks-no/github-actions/build-java-and-test@main
+        with:
+          java_version: ${{ inputs.java_version }}
+          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+          ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
+          is_release: ${{ inputs.is_release }}
+          version: ${{ steps.resolve_version.outputs.resolved_version }}
+
+      - name: 'Build and Push Helm'
+        if: inputs.helm_chart != ''
+        id: publish_helm
+        uses: ks-no/github-actions-public/publish-helm@main
+        with:
+          chart_name: ${{ inputs.helm_chart }}
+          chart_version: ${{ steps.resolve_version.outputs.resolved_version }}
+          image_tag: ${{ steps.resolve_version.outputs.resolved_version }}
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          helm_folder: ${{ inputs.helm_folder || inputs.helm_chart }}
+
+      - name: 'Build and Push Docker Image'
+        uses: ks-no/github-actions-public/publish-docker@main
+        with:
+          version: ${{ steps.resolve_version.outputs.resolved_version }}
+          is_release: ${{ inputs.is_release }}
+          image_name: ${{ github.event.repository.name }}
+          tags: ${{ steps.resolve_version.outputs.resolved_version }}
+          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+          path: ${{ inputs.path }}
+          java_version: ${{ inputs.java_version }}
+
+      - name: 'Deploy Application'
+        if: inputs.autodeploy == true && inputs.helm_chart != ''
+        uses: ks-no/github-actions-public/deploy@main
+        with:
+          helm_chart: ${{ inputs.helm_chart }}
+          environment: ${{ inputs.environment }}
+          version: ${{ steps.resolve_version.outputs.resolved_version }}
+          ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
+          ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+
+      - name: 'Publish, Release and Create Next Snapshot'
+        if: inputs.is_release == true
+        uses: ks-no/github-actions-public/publish-release-create-snapshot@main
+        with:
+          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+          version: ${{ steps.resolve_version.outputs.resolved_version }}
+          ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
+          release_body: ${{ steps.prepare_release.outputs.release_body }}
+
+      - name: 'Github Summary'
+        uses: ks-no/github-actions-public/post-github-summary@main
+        with:
+          git_tag: ${{ steps.resolve_version.outputs.resolved_version }}
+          helm_chart_url: ${{ steps.publish_helm.outputs.helm_chart_url }}
+          helm_chart_prov_url: ${{ steps.publish_helm.outputs.helm_chart_prov_url }}
