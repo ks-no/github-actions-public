@@ -1,5 +1,5 @@
 name: 'Resolve Version'
-description: 'Resolves the version to use for a build, depending on whether it is a release or not. Extends resolve-version.'
+description: 'Resolves the version to use for a build, depending on whether it is a release or not.'
 
 inputs:
   version:

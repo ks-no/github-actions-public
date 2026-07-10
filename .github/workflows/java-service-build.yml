@@ -113,6 +113,7 @@ jobs:
           version: ${{ inputs.version }}
           semver_increment: ${{ inputs.semver_increment }}
           is_release: ${{ inputs.is_release }}
+          snapshot_string: '-'
 
       - name: 'Docker login'
         uses: ks-no/github-actions-public/docker-login@main
