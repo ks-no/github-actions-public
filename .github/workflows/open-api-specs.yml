@@ -1,0 +1,184 @@
+name: 'OpenAPI Spec CI'
+
+on:
+  workflow_call:
+    inputs:
+      specs_folder:
+        description: 'Folder for OpenAPI specs (default: "specs").'
+        required: false
+        type: string
+        default: 'specs'
+      ignore_specs:
+        description: 'Comma-separated list of spec filenames (e.g. "foo.json,bar.json") to exclude from publishing to ks-no.github.io/static/api.'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      KS_RUNNER_APP_ID:
+        description: 'ID for the GitHub App.'
+        required: true
+      KS_RUNNER_PRIVATE_KEY:
+        description: 'Private key for accessing the GitHub App.'
+        required: true
+
+concurrency:
+  group: 'open-api-spec-ci-${{ github.repository }}-${{ github.ref }}'
+  cancel-in-progress: false
+
+jobs:
+  check-spec-changes:
+    runs-on: [self-hosted, x64]
+    timeout-minutes: 2
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - name: Check out code
+        uses: ks-no/github-actions-public/checkout@main
+        with:
+          fetch-depth: 2
+
+      - name: Sjekk om specs er endret i siste commit
+        id: check
+        shell: bash
+        env:
+          SPECS_FOLDER: ${{ inputs.specs_folder }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Manuell kjøring (workflow_dispatch) — kjører uansett."
+            exit 0
+          fi
+          if git rev-parse HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- "$SPECS_FOLDER"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### OpenAPI Spec CI"
+              echo ""
+              echo "Hoppet over — ingen endringer i \`$SPECS_FOLDER\` i siste commit."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  open-api-spec-ci:
+    needs: check-spec-changes
+    if: needs.check-spec-changes.outputs.changed == 'true'
+    runs-on: [self-hosted, x64]
+    timeout-minutes: 30
+    steps:
+      - name: Check out code
+        uses: ks-no/github-actions-public/checkout@main
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: true
+
+      - name: Set up github app for pushing changes
+        id: setup_github_app
+        uses: ks-no/github-actions-public/setup-github-app@main
+        with:
+          ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
+          ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+
+      - name: Get spec files
+        id: spec_files
+        shell: bash
+        run: echo "files=$(ls ${{ inputs.specs_folder }}/*.json | tr '\n' ' ')" >> $GITHUB_OUTPUT
+
+      - name: Lint specs
+        shell: bash
+        run: |
+          for file in ${{ steps.spec_files.outputs.files }}; do
+            redocly lint "$file"
+          done
+
+      - name: Create build directories
+        shell: bash
+        run: mkdir -p builded-specs build
+
+      - name: Bundle specs
+        shell: bash
+        run: |
+          for file in ${{ steps.spec_files.outputs.files }}; do
+            filename=$(basename "$file")
+            redocly bundle "$file" --ext json -o "builded-specs/$filename"
+          done
+
+      - name: Get bundled spec files
+        id: bundled_files
+        shell: bash
+        run: echo "files=$(ls builded-specs/*.json | tr '\n' ' ')" >> $GITHUB_OUTPUT
+
+      - name: Build HTML reports
+        shell: bash
+        run: |
+          for file in ${{ steps.bundled_files.outputs.files }}; do
+            filename=$(basename "$file" .json)
+            redocly build-docs "$file" -o "build/$filename.html" --disableGoogleFont true
+          done
+
+      - name: Upload HTML reports as artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
+        with:
+          name: html-reports
+          path: build/
+
+      - name: Checkout ks-no.github.io repository
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: ks-no/ks-no.github.io
+          token: ${{ steps.setup_github_app.outputs.app_token }}
+          path: ks-no.github.io
+          ref: source
+
+      - name: Copy specs to ks-no.github.io
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        shell: bash
+        run: |
+          mkdir -p ks-no.github.io/static/api
+          for file in ${{ steps.bundled_files.outputs.files }}; do
+            filename=$(basename "$file")
+            if echo ",${{ inputs.ignore_specs }}," | grep -q ",$filename,"; then
+              echo "Skipping $filename (ignored)"
+              continue
+            fi
+            cp "$file" "ks-no.github.io/static/api/"
+          done
+
+      - name: Commit and push changes
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        shell: bash
+        run: |
+          cd ks-no.github.io
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add static/api/*.json
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update OpenAPI specs"
+            git push origin HEAD:source
+          fi
+
+      - name: Trigger TypeScript model generation
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
+        with:
+          github-token: ${{ steps.setup_github_app.outputs.app_token }}
+          script: |
+            const owner = 'ks-no';
+            const repo = 'fiks-typescript-api-models';
+            const files = '${{ steps.bundled_files.outputs.files }}'.trim().split(/\s+/);
+
+            for (const file of files) {
+              const specName = file.split('/').pop().replace('.json', '');
+              console.log(`Triggering TypeScript model generation for ${specName}`);
+              await github.rest.actions.createWorkflowDispatch({
+                owner,
+                repo,
+                workflow_id: 'build-and-publish.yml',
+                ref: 'master',
+                inputs: { projectName: specName }
+              });
+            }
