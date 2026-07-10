@@ -211,6 +211,3 @@ jobs:
           project_version: ${{ inputs.is_release == true && 'release' || '' }}
           artifactory_repository_name: ${{ github.event.repository.name }}
           artifactory_artifact_version: ${{ steps.build_java.outputs.git_tag }}
-
-#      - name: 'Security Output with Trivy'
-#        uses: ks-no/github-actions/security-output-generator@main
