@@ -5,7 +5,11 @@ on:
   workflow_call:
     inputs:
       version:
-        description: 'The release version to release or deploy (e.g., 1.2.3)'
+        description: 'The release version to release or deploy (e.g., 1.2.3). Mutually exclusive with semver_increment.'
+        required: false
+        type: string
+      semver_increment:
+        description: 'Select semver increment: "next major", "next minor", or "next patch". Mutually exclusive with version.'
         required: false
         type: string
       is_release:
@@ -53,6 +57,11 @@ on:
         required: false
         type: string
         default: ''
+      big_runner:
+        description: 'Whether to use a big runner for the build.'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
@@ -63,12 +72,19 @@ permissions:
 
 jobs:
   build-and-deploy:
-    runs-on: [self-hosted, x64]
-    timeout-minutes: 30
+    runs-on: ${{ inputs.big_runner && 'x64-large' || fromJSON('["self-hosted", "x64"]') }}
+    timeout-minutes: 40
     concurrency:
       group: ${{ inputs.is_release == true && format('release-{0}', github.repository) || format('autobuild-{0}-{1}', github.repository, github.ref_name) }}
       cancel-in-progress: true
     steps:
+      - name: 'Validate version inputs'
+        uses: ks-no/github-actions-public/validate-version-inputs@main
+        with:
+          version: ${{ inputs.version }}
+          semver_increment: ${{ inputs.semver_increment }}
+          is_release: ${{ inputs.is_release }}
+
       - name: 'Set up GitHub App'
         id: app_token
         uses: ks-no/github-actions-public/setup-github-app@main
@@ -76,7 +92,7 @@ jobs:
           ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
           ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
 
-      - name: Checkout code
+      - name: 'Checkout code'
         uses: ks-no/github-actions-public/checkout@main
         with:
           submodules: true
@@ -84,11 +100,24 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Zizmor Scan
+      - name: 'Zizmor Scan'
         continue-on-error: true
         uses: ks-no/github-actions-public/zizmor-scan@main
         with:
           output_format: 'github' # Use 'sarif' for GHAS Security tab, or 'github' for inline annotations
+
+      - name: 'Resolve version'
+        id: resolve_version
+        uses: ks-no/github-actions-public/complete-version-resolvement@main
+        with:
+          version: ${{ inputs.version }}
+          semver_increment: ${{ inputs.semver_increment }}
+          is_release: ${{ inputs.is_release }}
+
+      - name: 'Docker login'
+        uses: ks-no/github-actions-public/docker-login@main
+        with:
+          token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: 'Prepare JFrog CLI'
         uses: ks-no/github-actions-public/prepare-the-frog@main
@@ -101,7 +130,7 @@ jobs:
         id: prepare_release
         uses: ks-no/github-actions-public/prepare-and-tag-release@main
         with:
-          version: ${{ inputs.version }}
+          version: ${{ steps.resolve_version.outputs.resolved_version }}
           java_version: ${{ inputs.java_version }}
           ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
@@ -113,11 +142,12 @@ jobs:
         uses: ks-no/github-actions/build-java-and-test@main
         with:
           java_version: ${{ inputs.java_version }}
+          # DT upload is handled by deploy workflow
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
           ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
           is_release: ${{ inputs.is_release }}
-          version: ${{ inputs.version }}
+          version: ${{ steps.resolve_version.outputs.resolved_version }}
 
       - name: 'Build and Push Helm'
         if: inputs.helm_chart != ''
@@ -161,7 +191,7 @@ jobs:
         with:
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
-          version: ${{ inputs.version }}
+          version: ${{ steps.resolve_version.outputs.resolved_version }}
           ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
           release_body: ${{ steps.prepare_release.outputs.release_body }}
 
