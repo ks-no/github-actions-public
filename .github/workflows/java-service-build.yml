@@ -140,7 +140,7 @@ jobs:
 
       - name: 'Build Java Project'
         id: build_java
-        uses: ks-no/github-actions/build-java-and-test@main
+        uses: ks-no/github-actions-public/build-java-and-test@main
         with:
           java_version: ${{ inputs.java_version }}
           # DT upload is handled by deploy workflow

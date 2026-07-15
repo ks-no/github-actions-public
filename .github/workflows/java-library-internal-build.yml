@@ -134,7 +134,7 @@ jobs:
           reviewer: ${{ inputs.reviewer }}
 
       - name: 'Build Java Project'
-        uses: ks-no/github-actions/build-java-and-test@main
+        uses: ks-no/github-actions-public/build-java-and-test@main
         with:
           java_version: ${{ inputs.java_version }}
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
