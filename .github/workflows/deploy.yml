@@ -1,0 +1,65 @@
+name: 'Deploy reusable workflow'
+
+on:
+  workflow_call:
+    inputs:
+      helm_chart:
+        description: 'Helm-chart to deploy'
+        required: true
+        type: string
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: string
+      version:
+        description: 'Version number to deploy'
+        required: true
+        type: string
+    secrets:
+      KS_RUNNER_APP_ID:
+        required: true
+      KS_RUNNER_PRIVATE_KEY:
+        required: true
+      ARTIFACTORY_USERNAME:
+        required: false
+      ARTIFACTORY_PASSWORD:
+        required: false
+      DEPENDENCY_TRACK_API_KEY:
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: 'deploy-${{ github.event.inputs.version }}'
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, x64]
+    timeout-minutes: 5
+    steps:
+      - name: Valider inputs
+        shell: bash
+        env:
+          HELM_CHART: ${{ inputs.helm_chart }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -z "$HELM_CHART" ] || [ -z "$ENVIRONMENT" ] || [ -z "$VERSION" ]; then
+            echo "::error::En eller flere inputs er tomme — helm_chart='$HELM_CHART', environment='$ENVIRONMENT', version='$VERSION'"
+            exit 1
+          fi
+
+      - name: Deploy via SQS
+        uses: ks-no/github-actions-public/deploy@main
+        with:
+          helm_chart: ${{ inputs.helm_chart }}
+          environment: ${{ inputs.environment }}
+          version: ${{ inputs.version }}
+          ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
+          ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+          dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
