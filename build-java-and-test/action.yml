@@ -1,0 +1,137 @@
+name: 'Java CI with Maven and JFrog'
+description: 'Builds, tests, and publishes a Java project using Maven and JFrog Artifactory.'
+inputs:
+  java_version:
+    description: 'The Java version to use (e.g., java8, java11)'
+    required: true
+    default: 'java21'
+  artifactory_username:
+    description: 'The username for Artifactory'
+    required: true
+  artifactory_password:
+    description: 'The password for Artifactory'
+    required: true
+  ks_github_app_token:
+    description: 'Token for checking out code and pushing changes'
+    required: true
+  is_release:
+    description: 'Set to true for a release build, false for a snapshot build.'
+    required: true
+    default: 'false'
+  version:
+    description: 'The release version to create (e.g., 1.2.3)'
+    required: false
+
+outputs:
+  git_tag:
+    description: "The calculated Git tag"
+    value: ${{ steps.build_vars.outputs.git_tag }}
+
+runs:
+  using: "composite"
+
+  steps:
+
+    - name: Set Build Name and Tag
+      id: build_vars
+      shell: bash
+      run: |
+        GIT_TAG=$(git describe --tags --abbrev=8 2>/dev/null || echo "0.0.0-$(git rev-list --count HEAD)-g$(git rev-parse --short=8 HEAD)")
+        if [ "${{ inputs.is_release }}" == "true" ]; then
+          GIT_TAG="${{ inputs.version }}"
+        fi
+        BUILD_NAME="KS-${{ github.event.repository.name }}-${GIT_TAG}"
+        echo "BUILD_NAME=$BUILD_NAME" >> $GITHUB_ENV
+        echo "GIT_TAG=$GIT_TAG" >> $GITHUB_ENV
+        echo "git_tag=$GIT_TAG" >> $GITHUB_OUTPUT
+
+    - name: Switch Java Version
+      shell: bash
+      run: |
+        JAVA_VERSION_CMD="${{ inputs.java_version }}"
+        if [[ "$JAVA_VERSION_CMD" =~ ^[0-9]+$ ]]; then
+          JAVA_VERSION_CMD="java$JAVA_VERSION_CMD"
+        fi
+        $JAVA_VERSION_CMD
+
+    - name: Cache Maven packages
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 #v5.0.4
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-
+
+    - name: Setup QEMU
+      uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a #v4.0.0
+
+    - name: Build with Maven (via JFrog CLI) and Generate SBOM
+      shell: bash
+      env:
+        ARTIFACTORY_USERNAME: ${{ inputs.artifactory_username }}
+        ARTIFACTORY_PASSWORD: ${{ inputs.artifactory_password }}
+        DOCKER_DEFAULT_PLATFORM: linux/amd64
+      run: |
+        echo "$ARTIFACTORY_PASSWORD" | docker login https://docker-all.artifactory.fiks.ks.no -u "$ARTIFACTORY_USERNAME" --password-stdin
+        git submodule update --init --recursive
+        jfrog mvn -B clean org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -Dcyclonedx.outputFormat=json install --build-name=$BUILD_NAME --build-number=$GITHUB_RUN_NUMBER
+
+    - name: Archive surefire test results
+      if: always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7.0.0
+      with:
+        name: surefire-reports
+        path: '**/surefire-reports/*.xml'
+
+    - name: Build and start component test containers
+      shell: bash
+      run: |
+        cd component-test
+        jfrog docker compose build
+        jfrog docker compose up -d --remove-orphans
+
+    - name: Run component tests
+      shell: bash
+      run: |
+        jfrog mvn -f component-test/pom.xml -Dcomponent=true -B verify
+
+    - name: Archive component test results
+      if: always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7.0.0
+      with:
+        name: component-test-reports
+        path: 'component-test/target/surefire-reports/*.xml'
+
+    - name: Publish Test Results
+      if: always()
+      continue-on-error: true
+      uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 #v3.0.0
+      with:
+        name: Test Results
+        path: '**/surefire-reports/*.xml'
+        reporter: java-junit
+        fail-on-error: true
+        fail-on-empty: true
+
+    - name: Stop and clean up component test containers
+      if: always()
+      shell: bash
+      run: |
+        cd component-test
+        jfrog docker compose down --volumes --remove-orphans
+
+    - name: Publish Maven Artifacts
+      shell: bash
+      run: |
+        jfrog mvn -B deploy -DskipTests --build-name=$BUILD_NAME --build-number=$GITHUB_RUN_NUMBER
+
+    - name: Publish Build Info
+      shell: bash
+      run: |
+        jfrog rt build-publish $BUILD_NAME $GITHUB_RUN_NUMBER
+
+    - name: Promote Release Build
+      if: ${{ inputs.is_release == 'true' }}
+      shell: bash
+      run: |
+        jfrog rt build-promote $BUILD_NAME $GITHUB_RUN_NUMBER ks-maven
