@@ -1,0 +1,384 @@
+name: 'Dependency License Check'
+description: >
+  Fetches Dependency-Track components for one project and posts a grouped
+  license inventory to the GitHub Job Summary. Fails softly.
+
+inputs:
+  dependency_track_api_key:
+    description: 'API key for Dependency-Track (PORTFOLIO_MANAGEMENT permission).'
+    required: true
+  project_name:
+    description: 'Dependency-Track project name (typically github.event.repository.name).'
+    required: true
+  project_version:
+    description: 'Dependency-Track project version (environment marker, e.g. main or prod).'
+    required: false
+    default: 'main'
+  project_uuid:
+    description: 'Optional pre-resolved project UUID. If provided, skips the project lookup.'
+    required: false
+    default: ''
+  dependency_track_base_url:
+    description: 'Dependency-Track base URL (HTTPS only).'
+    required: false
+    default: 'https://dt.fiks.dev.ks.no'
+  max_detail_rows:
+    description: 'Maximum number of component rows to include in detailed summary output.'
+    required: false
+    default: '400'
+
+outputs:
+  project_uuid:
+    description: 'Resolved project UUID used for this report.'
+    value: ${{ steps.resolve_project.outputs.project_uuid }}
+  total_components:
+    description: 'Total number of components scanned for this project.'
+    value: ${{ steps.scan.outputs.total_components }}
+  unknown_license_count:
+    description: 'Number of components with unknown license classification.'
+    value: ${{ steps.scan.outputs.unknown_license_count }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve DT project
+      id: resolve_project
+      shell: bash
+      env:
+        DT_API_KEY: ${{ inputs.dependency_track_api_key }}
+        DT_PROJECT_NAME: ${{ inputs.project_name }}
+        DT_PROJECT_VERSION: ${{ inputs.project_version }}
+        DT_PROJECT_UUID_INPUT: ${{ inputs.project_uuid }}
+        DT_BASE_URL_INPUT: ${{ inputs.dependency_track_base_url }}
+        DT_RETRY_COUNT: '3'
+        DT_RETRY_DELAY_SECONDS: '2'
+        DT_WARNING_PREFIX: 'DT license check'
+      run: |
+        set -euo pipefail
+        bash "${GITHUB_ACTION_PATH}/../resolve-dt-project/resolve-project.sh"
+
+    - name: Scan DT project components for licenses
+      id: scan
+      shell: bash
+      env:
+        DT_API_KEY: ${{ inputs.dependency_track_api_key }}
+        DT_PROJECT_NAME: ${{ inputs.project_name }}
+        DT_PROJECT_VERSION: ${{ inputs.project_version }}
+        DT_PROJECT_UUID: ${{ steps.resolve_project.outputs.project_uuid }}
+        DT_PROJECT_RESOLVED: ${{ steps.resolve_project.outputs.resolved }}
+        DT_BASE_URL: ${{ steps.resolve_project.outputs.base_url }}
+        MAX_DETAIL_ROWS: ${{ inputs.max_detail_rows }}
+      run: |
+        set -euo pipefail
+
+        warn_and_exit() {
+          echo "total_components=0" >> "$GITHUB_OUTPUT"
+          echo "unknown_license_count=0" >> "$GITHUB_OUTPUT"
+          echo "::warning::DT license check: $1"
+          exit 0
+        }
+
+        trap 'warn_and_exit "Unexpected error while generating license inventory."' ERR
+
+        if [[ "$DT_PROJECT_RESOLVED" != "true" || -z "$DT_PROJECT_UUID" ]]; then
+          warn_and_exit "Project could not be resolved; skipping license inventory."
+        fi
+
+        COMPONENTS_FILE=$(mktemp)
+        PAGE_SIZE=100
+        PAGE_TOKEN=""
+        PAGE_INDEX=1
+        MAX_PAGES=10000
+
+        echo '[]' > "$COMPONENTS_FILE"
+
+        while [[ "$PAGE_INDEX" -le "$MAX_PAGES" ]]; do
+          PAGE_FILE=$(mktemp)
+
+          COMPONENTS_URL="$DT_BASE_URL/api/v2/projects/$DT_PROJECT_UUID/components?limit=$PAGE_SIZE&sort_by=name&sort_direction=ASC"
+          if [[ -n "$PAGE_TOKEN" ]]; then
+            ENCODED_PAGE_TOKEN=$(jq -rn --arg v "$PAGE_TOKEN" '$v | @uri')
+            COMPONENTS_URL+="&page_token=$ENCODED_PAGE_TOKEN"
+          fi
+
+          HTTP_CODE=$(curl -sS -o "$PAGE_FILE" -w '%{http_code}' \
+            --connect-timeout 10 --max-time 60 \
+            -H "X-Api-Key: $DT_API_KEY" \
+            "$COMPONENTS_URL") || true
+
+          if ! [[ "$HTTP_CODE" =~ ^[0-9]{3}$ ]]; then
+            rm -f "$PAGE_FILE" "$COMPONENTS_FILE"
+            warn_and_exit "Failed to fetch components (no HTTP response)."
+          fi
+
+          if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
+            rm -f "$PAGE_FILE" "$COMPONENTS_FILE"
+            warn_and_exit "Failed to fetch components (HTTP $HTTP_CODE)."
+          fi
+
+          if ! jq -e '.items and (.items | type == "array")' "$PAGE_FILE" >/dev/null 2>&1; then
+            rm -f "$PAGE_FILE" "$COMPONENTS_FILE"
+            warn_and_exit "Failed to parse component page payload."
+          fi
+
+          PAGE_COUNT=$(jq '.items | length' "$PAGE_FILE" 2>/dev/null || echo "0")
+          if [[ "$PAGE_COUNT" == "0" ]]; then
+            rm -f "$PAGE_FILE"
+            break
+          fi
+
+          jq -s '.[0] + .[1].items' "$COMPONENTS_FILE" "$PAGE_FILE" > "${COMPONENTS_FILE}.next"
+          mv "${COMPONENTS_FILE}.next" "$COMPONENTS_FILE"
+
+          NEXT_PAGE_TOKEN=$(jq -r '.next_page_token // empty' "$PAGE_FILE" 2>/dev/null || echo "")
+          rm -f "$PAGE_FILE"
+
+          if [[ -z "$NEXT_PAGE_TOKEN" ]]; then
+            break
+          fi
+
+          PAGE_TOKEN="$NEXT_PAGE_TOKEN"
+          PAGE_INDEX=$((PAGE_INDEX + 1))
+        done
+
+        if [[ "$PAGE_INDEX" -gt "$MAX_PAGES" ]]; then
+          echo "::warning::DT license check: Stopping pagination after MAX_PAGES=${MAX_PAGES}."
+        fi
+
+        TOTAL_COMPONENTS=$(jq 'length' "$COMPONENTS_FILE")
+        NORMALIZED_FILE=$(mktemp)
+
+        # Keep catalog lookup on v1 until a v2 license listing endpoint is available.
+        DT_LICENSES_FILE=$(mktemp)
+        DT_LICENSES_HEADERS_FILE=$(mktemp)
+        LICENSE_PAGE_SIZE=1000
+        LICENSES_HTTP=$(curl -sS -D "$DT_LICENSES_HEADERS_FILE" -o "$DT_LICENSES_FILE" -w '%{http_code}' \
+          --connect-timeout 10 --max-time 60 \
+          -H "X-Api-Key: $DT_API_KEY" \
+          "$DT_BASE_URL/api/v1/license?pageSize=$LICENSE_PAGE_SIZE&sortName=licenseId&sortOrder=asc") || true
+        
+        if [[ "$LICENSES_HTTP" =~ ^2[0-9]{2}$ ]]; then
+          LICENSE_COUNT=$(jq 'length' "$DT_LICENSES_FILE" 2>/dev/null || echo "0")
+          LICENSE_TOTAL_HEADER=$(awk -F': ' 'tolower($1)=="x-total-count" {gsub("\r", "", $2); print $2}' "$DT_LICENSES_HEADERS_FILE" | tail -n1)
+          if [[ "$LICENSE_TOTAL_HEADER" =~ ^[0-9]+$ ]] && [[ "$LICENSE_TOTAL_HEADER" -gt "$LICENSE_PAGE_SIZE" ]]; then
+            echo "::warning::DT license check: License catalog appears truncated (X-Total-Count=${LICENSE_TOTAL_HEADER}, pageSize=${LICENSE_PAGE_SIZE})."
+          elif [[ "$LICENSE_COUNT" -eq "$LICENSE_PAGE_SIZE" ]]; then
+            echo "::warning::DT license check: License catalog may be truncated at pageSize=${LICENSE_PAGE_SIZE}."
+          fi
+          LICENSE_INFO_MAP=$(jq '
+            map({
+              key: (.licenseId // ""),
+              value: {
+                category: ((.licenseGroups[0].name // "") | tostring),
+                name: ((.name // "") | tostring),
+                explanation: (
+                  (.licenseText // .licenseComments // .standardLicenseHeader // "")
+                  | tostring
+                  | gsub("[\\r\\n]+"; " ")
+                  | gsub("[ \\t]+"; " ")
+                  | if (length > 900) then ((.[0:900] | sub("\\s+\\S*$"; "")) + "...") else . end
+                )
+              }
+            })
+            | map(select(.key != ""))
+            | from_entries
+          ' "$DT_LICENSES_FILE" 2>/dev/null || echo '{}')
+
+          # Enrich explanations from per-license detail endpoint for licenses used by this project.
+          # This improves summary quality when catalog entries have empty/truncated explanation fields.
+          LICENSE_TEXT_FETCH_LIMIT=25
+          UNIQUE_LICENSES_FILE=$(mktemp)
+          jq -r '
+            map((.resolved_license.license_id // .license // "UNKNOWN_LICENSE") | tostring)
+            | unique
+            | .[]
+            | select(. != "" and . != "UNKNOWN_LICENSE")
+          ' "$COMPONENTS_FILE" > "$UNIQUE_LICENSES_FILE"
+
+          UNIQUE_LICENSE_COUNT=$(wc -l < "$UNIQUE_LICENSES_FILE" | tr -d ' ')
+          FETCHED_LICENSE_COUNT=0
+
+          if [[ "$UNIQUE_LICENSE_COUNT" -gt "$LICENSE_TEXT_FETCH_LIMIT" ]]; then
+            echo "::warning::DT license check: Limiting per-license text enrichment to ${LICENSE_TEXT_FETCH_LIMIT} of ${UNIQUE_LICENSE_COUNT} unique licenses."
+          fi
+
+          while IFS= read -r LICENSE_ID; do
+            if [[ "$FETCHED_LICENSE_COUNT" -ge "$LICENSE_TEXT_FETCH_LIMIT" ]]; then
+              break
+            fi
+            if [[ -z "$LICENSE_ID" ]]; then
+              continue
+            fi
+
+            DETAIL_FILE=$(mktemp)
+            ENCODED_LICENSE_ID=$(jq -rn --arg v "$LICENSE_ID" '$v | @uri')
+            DETAIL_HTTP=$(curl -sS -o "$DETAIL_FILE" -w '%{http_code}' \
+              --connect-timeout 10 --max-time 30 \
+              -H "X-Api-Key: $DT_API_KEY" \
+              "$DT_BASE_URL/api/v1/license/$ENCODED_LICENSE_ID") || true
+
+            if [[ "$DETAIL_HTTP" =~ ^2[0-9]{2}$ ]]; then
+              DETAIL_TEXT=$(jq -r '
+                (.licenseText // "")
+                | tostring
+                | gsub("[\\r\\n]+"; " ")
+                | gsub("[ \\t]+"; " ")
+                | if (length > 900) then ((.[0:900] | sub("\\s+\\S*$"; "")) + "...") else . end
+              ' "$DETAIL_FILE" 2>/dev/null || echo "")
+              DETAIL_NAME=$(jq -r '(.name // "") | tostring' "$DETAIL_FILE" 2>/dev/null || echo "")
+
+              if [[ -n "$DETAIL_TEXT" ]]; then
+                LICENSE_INFO_MAP=$(jq -c --arg k "$LICENSE_ID" --arg nm "$DETAIL_NAME" --arg exp "$DETAIL_TEXT" '
+                  .[$k] = (
+                    (.[$k] // {category:"", name:"", explanation:""})
+                    | .name = (if $nm != "" then $nm else (.name // "") end)
+                    | .explanation = $exp
+                  )
+                ' <<< "$LICENSE_INFO_MAP" 2>/dev/null || echo "$LICENSE_INFO_MAP")
+              fi
+            fi
+
+            rm -f "$DETAIL_FILE"
+            FETCHED_LICENSE_COUNT=$((FETCHED_LICENSE_COUNT + 1))
+          done < "$UNIQUE_LICENSES_FILE"
+
+          rm -f "$UNIQUE_LICENSES_FILE"
+        else
+          echo "::warning::DT license check: Failed to fetch license catalog (HTTP $LICENSES_HTTP), falling back to regex-based categorization."
+          LICENSE_INFO_MAP='{}'
+        fi
+        rm -f "$DT_LICENSES_FILE" "$DT_LICENSES_HEADERS_FILE"
+
+        # Normalize components with DT-sourced license categories
+        jq --argjson licenseInfoMap "$LICENSE_INFO_MAP" '
+          def get_category($licenseId):
+            if ($licenseInfoMap | has($licenseId)) and (($licenseInfoMap[$licenseId].category // "") != "") then
+              $licenseInfoMap[$licenseId].category
+            else
+              # Fallback regex categorization for unmapped licenses
+              ($licenseId | ascii_downcase) as $v
+              | if ($v | test("non-?commercial|by-?nc")) then "Non-Commercial"
+                elif ($v | test("agpl|gpl")) then "Copyleft"
+                elif ($v | test("lgpl|epl|mpl|cddl")) then "Weak Copyleft"
+                elif ($v | test("apache|mit|bsd|isc|cc0|unlicense|public.?domain|boost|zlib|wtfpl|0bsd")) then "Permissive"
+                else "Unknown"
+                end
+            end;
+
+          def get_explanation($licenseId; $category):
+            (($licenseInfoMap[$licenseId].name // "") | tostring) as $licenseName
+            | if ($licenseInfoMap | has($licenseId)) and (($licenseInfoMap[$licenseId].explanation // "") != "") then
+                "License "
+                + (if $licenseName != "" then $licenseName + " (" + $licenseId + ")" else $licenseId end)
+                + ": "
+                + $licenseInfoMap[$licenseId].explanation
+            elif ($licenseId == "UNKNOWN_LICENSE" or $category == "Unknown") then
+              "No explanation found in Dependency-Track. Classify this license in the catalog."
+            elif ($category == "Non-Commercial") then
+              "License is marked non-commercial; approval is required before use in production."
+            elif ($category == "Copyleft") then
+              "Copyleft obligations may apply; review redistribution requirements before release."
+            elif ($category == "Weak Copyleft") then
+              "Weak copyleft obligations may apply; verify linking and distribution requirements."
+            else
+              "No additional license explanation available in Dependency-Track."
+            end;
+
+          map(
+            ((.resolved_license.license_id // .license // "UNKNOWN_LICENSE") | tostring) as $lic
+            | (if $lic == "UNKNOWN_LICENSE" then "Unknown" else get_category($lic) end) as $category
+            | {
+              name: ((.name // "UNKNOWN_COMPONENT") | tostring),
+              version: ((.version // "UNKNOWN_VERSION") | tostring),
+              license: $lic,
+              category: $category,
+              explanation: get_explanation($lic; $category)
+            }
+          )
+        ' "$COMPONENTS_FILE" > "$NORMALIZED_FILE"
+
+        UNKNOWN_LICENSE_COUNT=$(jq '[.[] | select(.category == "Unknown")] | length' "$NORMALIZED_FILE")
+
+        echo "total_components=$TOTAL_COMPONENTS" >> "$GITHUB_OUTPUT"
+        echo "unknown_license_count=$UNKNOWN_LICENSE_COUNT" >> "$GITHUB_OUTPUT"
+
+        PROJECT_URL="$DT_BASE_URL/projects/$DT_PROJECT_UUID"
+
+        {
+          echo ""
+          echo "### License Check - ${DT_PROJECT_NAME} (${DT_PROJECT_VERSION})"
+          echo ""
+          echo "- Total components: ${TOTAL_COMPONENTS}"
+          echo "- Unknown licenses: ${UNKNOWN_LICENSE_COUNT}"
+          echo "- Project: [View in Dependency-Track](${PROJECT_URL})"
+          echo ""
+          echo "| Category | License | Components | Instruction |"
+          echo "|----------|---------|-----------:|-------------|"
+          jq -r '
+            def clean_md: gsub("[<>|]"; "");
+
+            def instruction(category; license):
+              if (license == "UNKNOWN_LICENSE" or category == "Unknown") then "Verifiser at det ikke kreves vurdering av lisensen"
+              elif category == "Non-Commercial" then "Krever godkjenning av team sikkerhet"
+              elif category == "Copyleft" then "Krever gjennomgang og godkjenning av lisens før prodsetting"
+              elif category == "Weak Copyleft" then "Gjennomgå lisenser og vurder om tiltak er nødvendig"
+              else "Ingen tiltak nødvendig"
+              end;
+
+            sort_by(.category, .license, .name)
+            | group_by([.category, .license])
+            | map("| " + (.[0].category | clean_md) + " | " + (.[0].license | clean_md) + " | " + (length | tostring) + " | " + instruction(.[0].category; .[0].license) + " |")
+            | .[]
+          ' "$NORMALIZED_FILE"
+          echo ""
+          echo "#### Components By License"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        DETAIL_LIMIT="$MAX_DETAIL_ROWS"
+        if ! [[ "$DETAIL_LIMIT" =~ ^[0-9]+$ ]]; then
+          DETAIL_LIMIT=400
+        fi
+
+        if [[ "$TOTAL_COMPONENTS" -le "$DETAIL_LIMIT" ]]; then
+          jq -r --arg dtBaseUrl "$DT_BASE_URL" '
+            def clean_md: gsub("[<>|]"; "");
+
+            def instruction(category; license):
+              if (license == "UNKNOWN_LICENSE" or category == "Unknown") then "Must be classified in Dependency-Track"
+              elif category == "Non-Commercial" then "Approval required"
+              elif category == "Copyleft" then "Escalate and review before release"
+              elif category == "Weak Copyleft" then "Review obligations"
+              else "No action needed"
+              end;
+
+            def full_text_link(baseUrl; license):
+              if (license == "UNKNOWN_LICENSE") then ""
+              else "\n\nFull license text: [View in Dependency-Track]("
+                + baseUrl
+                + "/licenses/"
+                + (license | @uri)
+                + "/licenseText)\n\n"
+              end;
+
+            sort_by(.category, .license, .name)
+            | group_by([.category, .license])
+            | .[]
+            | "<details>\n<summary>" + (.[0].category | clean_md) + " | " + (.[0].license | clean_md) + " (" + (length | tostring) + ")</summary>\n\n"
+              + "License explanation: " + (.[0].explanation | clean_md) + "\n\n"
+              + full_text_link($dtBaseUrl; .[0].license)
+              + (map("- " + (.name | clean_md) + " (" + (.version | clean_md) + ")") | unique | join("\n"))
+              + "\n\nInstruction: " + instruction(.[0].category; .[0].license) + "\n\n</details>\n"
+          ' "$NORMALIZED_FILE" >> "$GITHUB_STEP_SUMMARY"
+        else
+          {
+            echo ""
+            echo "> Detailed per-component list omitted because total components (${TOTAL_COMPONENTS}) exceeds max_detail_rows (${DETAIL_LIMIT})."
+            echo "> Increase max_detail_rows to include expandable component sections in the summary."
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        if [[ "$UNKNOWN_LICENSE_COUNT" -gt 0 ]]; then
+          echo "::warning::DT license check: ${UNKNOWN_LICENSE_COUNT} component(s) have unknown licenses in ${DT_PROJECT_NAME}"
+        fi
+
+        rm -f "$NORMALIZED_FILE" "$COMPONENTS_FILE"

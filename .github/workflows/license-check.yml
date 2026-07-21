@@ -1,0 +1,80 @@
+name: License-check
+
+on:
+  workflow_call:
+    inputs:
+      project_name:
+        description: 'Dependency-Track project name override.'
+        required: false
+        type: string
+        default: ''
+      project_version:
+        description: 'Dependency-Track project version (main/prod/etc).'
+        required: false
+        type: string
+        default: 'main'
+      project_uuid:
+        description: 'Optional pre-resolved project UUID.'
+        required: false
+        type: string
+        default: ''
+      dependency_track_base_url:
+        description: 'Dependency-Track base URL (HTTPS only).'
+        required: false
+        type: string
+        default: 'https://dt.fiks.dev.ks.no'
+    secrets:
+      dependency_track_api_key:
+        required: false
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: 'Dependency-Track project name override.'
+        required: false
+        type: string
+        default: ''
+      project_version:
+        description: 'Dependency-Track project version (main/prod/etc).'
+        required: false
+        type: string
+        default: 'main'
+      project_uuid:
+        description: 'Optional pre-resolved project UUID.'
+        required: false
+        type: string
+        default: ''
+      dependency_track_base_url:
+        description: 'Dependency-Track base URL (HTTPS only).'
+        required: false
+        type: string
+        default: 'https://dt.fiks.dev.ks.no'
+
+
+jobs:
+  license-scan:
+    runs-on: [self-hosted, x64]
+    steps:
+      - name: Resolve effective project name
+        id: effective_name
+        shell: bash
+        env:
+          PROJECT_NAME_INPUT: ${{ inputs.project_name }}
+          DEFAULT_PROJECT_NAME: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+
+          EFFECTIVE_PROJECT_NAME="$PROJECT_NAME_INPUT"
+          if [[ -z "$EFFECTIVE_PROJECT_NAME" ]]; then
+            EFFECTIVE_PROJECT_NAME="$DEFAULT_PROJECT_NAME"
+          fi
+
+          echo "project_name=$EFFECTIVE_PROJECT_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Dependency-Track license check
+        uses: ks-no/github-actions-public/dt-license-check@main
+        with:
+          dependency_track_api_key: ${{ secrets.dependency_track_api_key }}
+          project_name: ${{ steps.effective_name.outputs.project_name }}
+          project_version: ${{ inputs.project_version }}
+          project_uuid: ${{ inputs.project_uuid }}
+          dependency_track_base_url: ${{ inputs.dependency_track_base_url }}

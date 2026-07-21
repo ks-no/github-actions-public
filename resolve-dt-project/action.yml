@@ -1,0 +1,65 @@
+name: 'Resolve Dependency-Track Project'
+description: >
+  Resolves a Dependency-Track project UUID from either a pre-resolved UUID or
+  project name + version lookup. Fails softly and emits outputs for downstream actions.
+
+inputs:
+  dependency_track_api_key:
+    description: 'API key for Dependency-Track (PORTFOLIO_MANAGEMENT required for lookup).'
+    required: true
+  project_name:
+    description: 'Dependency-Track project name (typically github.event.repository.name).'
+    required: true
+  project_version:
+    description: 'Dependency-Track project version (environment marker, e.g. main or prod).'
+    required: false
+    default: 'main'
+  project_uuid:
+    description: 'Optional pre-resolved project UUID. If provided, skips lookup.'
+    required: false
+    default: ''
+  base_url:
+    description: 'Dependency-Track base URL (HTTPS only).'
+    required: false
+    default: 'https://dt.fiks.dev.ks.no'
+  retry_count:
+    description: 'Number of lookup attempts when project_uuid is not provided.'
+    required: false
+    default: '3'
+  retry_delay_seconds:
+    description: 'Delay between lookup retries in seconds.'
+    required: false
+    default: '2'
+  warning_prefix:
+    description: 'Prefix for warning messages emitted by this action.'
+    required: false
+    default: 'DT resolver'
+
+outputs:
+  project_uuid:
+    description: 'Resolved project UUID or empty string when unresolved.'
+    value: ${{ steps.resolve.outputs.project_uuid }}
+  resolved:
+    description: 'true if project UUID was resolved and validated, otherwise false.'
+    value: ${{ steps.resolve.outputs.resolved }}
+  base_url:
+    description: 'Normalized base URL used for API calls.'
+    value: ${{ steps.resolve.outputs.base_url }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve DT project UUID
+      id: resolve
+      shell: bash
+      env:
+        DT_API_KEY: ${{ inputs.dependency_track_api_key }}
+        DT_PROJECT_NAME: ${{ inputs.project_name }}
+        DT_PROJECT_VERSION: ${{ inputs.project_version }}
+        DT_PROJECT_UUID_INPUT: ${{ inputs.project_uuid }}
+        DT_BASE_URL_INPUT: ${{ inputs.base_url }}
+        DT_RETRY_COUNT: ${{ inputs.retry_count }}
+        DT_RETRY_DELAY_SECONDS: ${{ inputs.retry_delay_seconds }}
+        DT_WARNING_PREFIX: ${{ inputs.warning_prefix }}
+      run: |
+        bash "${GITHUB_ACTION_PATH}/resolve-project.sh"
