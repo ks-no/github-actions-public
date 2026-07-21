@@ -71,7 +71,7 @@ jobs:
           echo "project_name=$EFFECTIVE_PROJECT_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Dependency-Track license check
-        uses: ks-no/github-actions-public/dt-license-check@licens-check
+        uses: ks-no/github-actions-public/dt-license-check@main
         with:
           dependency_track_api_key: ${{ secrets.dependency_track_api_key }}
           project_name: ${{ steps.effective_name.outputs.project_name }}
