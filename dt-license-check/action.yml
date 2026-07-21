@@ -80,11 +80,14 @@ runs:
         }
 
         cleanup_temp_files() {
-          rm -f "${PAGE_FILE:-}" "${DETAIL_FILE:-}" "${UNIQUE_LICENSES_FILE:-}" \
-            "${DT_LICENSES_FILE:-}" "${DT_LICENSES_HEADERS_FILE:-}" \
-            "${NORMALIZED_FILE:-}" "${COMPONENTS_FILE:-}"
+          local f
+          for f in "${PAGE_FILE:-}" "${DETAIL_FILE:-}" "${UNIQUE_LICENSES_FILE:-}" \
+                   "${DT_LICENSES_FILE:-}" "${DT_LICENSES_HEADERS_FILE:-}" \
+                   "${NORMALIZED_FILE:-}" "${COMPONENTS_FILE:-}"; do
+            if [[ -n "$f" ]]; then rm -f "$f"; fi
+          done
           if [[ -n "${COMPONENTS_FILE:-}" ]]; then
-            rm -f "${COMPONENTS_FILE}.next"
+            rm -f "${COMPONENTS_FILE}.next" || true
           fi
         }
 
