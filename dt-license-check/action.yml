@@ -225,9 +225,9 @@ runs:
 
             def instruction(category; license):
               if (license == "UNKNOWN_LICENSE" or category == "Unknown") then "Verifiser at det ikke kreves vurdering av lisensen"
-              elif category == "Non-Commercial" then "Krever godkjenning av lisensansvarlig"
-              elif category == "Copyleft" then "Krever gjennomgang før prodsetting"
-              elif category == "Weak Copyleft" then "Gjennomgå forpliktelser og vurder om tiltak er nødvendig"
+              elif category == "Non-Commercial" then "Krever godkjenning av team sikkerhet"
+              elif category == "Copyleft" then "Krever gjennomgang og godkjenning av lisens før prodsetting"
+              elif category == "Weak Copyleft" then "Gjennomgå lisenser og vurder om tiltak er nødvendig"
               else "Ingen tiltak nødvendig"
               end;
 
