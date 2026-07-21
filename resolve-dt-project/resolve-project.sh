@@ -7,12 +7,24 @@ if [[ -z "$WARNING_PREFIX" ]]; then
   WARNING_PREFIX="DT resolver"
 fi
 
+escape_workflow_value() {
+  local value="$1"
+  value="${value//'%'/'%25'}"
+  value="${value//$'\r'/'%0D'}"
+  value="${value//$'\n'/'%0A'}"
+  printf '%s' "$value"
+}
+
 warn_and_exit() {
   local message="$1"
+  local escaped_prefix
+  local escaped_message
+  escaped_prefix=$(escape_workflow_value "$WARNING_PREFIX")
+  escaped_message=$(escape_workflow_value "$message")
   echo "project_uuid=" >> "$GITHUB_OUTPUT"
   echo "resolved=false" >> "$GITHUB_OUTPUT"
   echo "base_url=${BASE_URL}" >> "$GITHUB_OUTPUT"
-  echo "::warning::${WARNING_PREFIX}: ${message}"
+  echo "::warning::${escaped_prefix}: ${escaped_message}"
   exit 0
 }
 

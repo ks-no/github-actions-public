@@ -71,13 +71,37 @@ runs:
       run: |
         set -euo pipefail
 
+        escape_workflow_value() {
+          local value="$1"
+          value="${value//'%'/'%25'}"
+          value="${value//$'\r'/'%0D'}"
+          value="${value//$'\n'/'%0A'}"
+          printf '%s' "$value"
+        }
+
+        cleanup_temp_files() {
+          local f
+          for f in "${PAGE_FILE:-}" "${DETAIL_FILE:-}" "${UNIQUE_LICENSES_FILE:-}" \
+                   "${DT_LICENSES_FILE:-}" "${DT_LICENSES_HEADERS_FILE:-}" \
+                   "${NORMALIZED_FILE:-}" "${COMPONENTS_FILE:-}"; do
+            if [[ -n "$f" ]]; then rm -f "$f"; fi
+          done
+          if [[ -n "${COMPONENTS_FILE:-}" ]]; then
+            rm -f "${COMPONENTS_FILE}.next" || true
+          fi
+        }
+
         warn_and_exit() {
+          local message="$1"
+          local escaped_message
+          escaped_message=$(escape_workflow_value "$message")
           echo "total_components=0" >> "$GITHUB_OUTPUT"
           echo "unknown_license_count=0" >> "$GITHUB_OUTPUT"
-          echo "::warning::DT license check: $1"
+          echo "::warning::DT license check: ${escaped_message}"
           exit 0
         }
 
+        trap cleanup_temp_files EXIT
         trap 'warn_and_exit "Unexpected error while generating license inventory."' ERR
 
         if [[ "$DT_PROJECT_RESOLVED" != "true" || -z "$DT_PROJECT_UUID" ]]; then
@@ -378,7 +402,6 @@ runs:
         fi
 
         if [[ "$UNKNOWN_LICENSE_COUNT" -gt 0 ]]; then
-          echo "::warning::DT license check: ${UNKNOWN_LICENSE_COUNT} component(s) have unknown licenses in ${DT_PROJECT_NAME}"
+          SAFE_PROJECT_NAME=$(escape_workflow_value "$DT_PROJECT_NAME")
+          echo "::warning::DT license check: ${UNKNOWN_LICENSE_COUNT} component(s) have unknown licenses in ${SAFE_PROJECT_NAME}"
         fi
-
-        rm -f "$NORMALIZED_FILE" "$COMPONENTS_FILE"
