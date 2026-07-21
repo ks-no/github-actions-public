@@ -86,18 +86,25 @@ runs:
 
         COMPONENTS_FILE=$(mktemp)
         PAGE_SIZE=100
-        PAGE_NUMBER=1
+        PAGE_TOKEN=""
+        PAGE_INDEX=1
         MAX_PAGES=10000
-        PREV_PAGE_SIGNATURE=""
 
         echo '[]' > "$COMPONENTS_FILE"
 
-        while [[ "$PAGE_NUMBER" -le "$MAX_PAGES" ]]; do
+        while [[ "$PAGE_INDEX" -le "$MAX_PAGES" ]]; do
           PAGE_FILE=$(mktemp)
 
+          COMPONENTS_URL="$DT_BASE_URL/api/v2/projects/$DT_PROJECT_UUID/components?limit=$PAGE_SIZE&sort_by=name&sort_direction=ASC"
+          if [[ -n "$PAGE_TOKEN" ]]; then
+            ENCODED_PAGE_TOKEN=$(jq -rn --arg v "$PAGE_TOKEN" '$v | @uri')
+            COMPONENTS_URL+="&page_token=$ENCODED_PAGE_TOKEN"
+          fi
+
           HTTP_CODE=$(curl -sS -o "$PAGE_FILE" -w '%{http_code}' \
+            --connect-timeout 10 --max-time 60 \
             -H "X-Api-Key: $DT_API_KEY" \
-            "$DT_BASE_URL/api/v1/component/project/$DT_PROJECT_UUID?pageNumber=$PAGE_NUMBER&pageSize=$PAGE_SIZE&sortName=name&sortOrder=asc") || true
+            "$COMPONENTS_URL") || true
 
           if ! [[ "$HTTP_CODE" =~ ^[0-9]{3}$ ]]; then
             rm -f "$PAGE_FILE" "$COMPONENTS_FILE"
@@ -109,56 +116,61 @@ runs:
             warn_and_exit "Failed to fetch components (HTTP $HTTP_CODE)."
           fi
 
-          PAGE_COUNT=$(jq 'length' "$PAGE_FILE" 2>/dev/null || echo "0")
+          if ! jq -e '.items and (.items | type == "array")' "$PAGE_FILE" >/dev/null 2>&1; then
+            rm -f "$PAGE_FILE" "$COMPONENTS_FILE"
+            warn_and_exit "Failed to parse component page payload."
+          fi
+
+          PAGE_COUNT=$(jq '.items | length' "$PAGE_FILE" 2>/dev/null || echo "0")
           if [[ "$PAGE_COUNT" == "0" ]]; then
             rm -f "$PAGE_FILE"
             break
           fi
 
-          PAGE_SIGNATURE=$(jq -c 'map([(.uuid // .bomRef // .name // ""), (.version // "")])' "$PAGE_FILE" 2>/dev/null || echo "")
-          if [[ -z "$PAGE_SIGNATURE" ]]; then
-            rm -f "$PAGE_FILE" "$COMPONENTS_FILE"
-            warn_and_exit "Failed to parse component page payload."
-          fi
-
-          if [[ "$PAGE_SIGNATURE" == "$PREV_PAGE_SIGNATURE" ]]; then
-            rm -f "$PAGE_FILE"
-            echo "::warning::DT license check: Stopping pagination due to duplicate page payload at page $PAGE_NUMBER."
-            break
-          fi
-
-          PREV_PAGE_SIGNATURE="$PAGE_SIGNATURE"
-
-          jq -s '.[0] + .[1]' "$COMPONENTS_FILE" "$PAGE_FILE" > "${COMPONENTS_FILE}.next"
+          jq -s '.[0] + .[1].items' "$COMPONENTS_FILE" "$PAGE_FILE" > "${COMPONENTS_FILE}.next"
           mv "${COMPONENTS_FILE}.next" "$COMPONENTS_FILE"
+
+          NEXT_PAGE_TOKEN=$(jq -r '.next_page_token // empty' "$PAGE_FILE" 2>/dev/null || echo "")
           rm -f "$PAGE_FILE"
 
-          if [[ "$PAGE_COUNT" -lt "$PAGE_SIZE" ]]; then
+          if [[ -z "$NEXT_PAGE_TOKEN" ]]; then
             break
           fi
 
-          PAGE_NUMBER=$((PAGE_NUMBER + 1))
+          PAGE_TOKEN="$NEXT_PAGE_TOKEN"
+          PAGE_INDEX=$((PAGE_INDEX + 1))
         done
 
-        if [[ "$PAGE_NUMBER" -gt "$MAX_PAGES" ]]; then
+        if [[ "$PAGE_INDEX" -gt "$MAX_PAGES" ]]; then
           echo "::warning::DT license check: Stopping pagination after MAX_PAGES=${MAX_PAGES}."
         fi
 
         TOTAL_COMPONENTS=$(jq 'length' "$COMPONENTS_FILE")
         NORMALIZED_FILE=$(mktemp)
 
-        # Fetch DT license catalog and build category map
-        LICENSES_HTTP=$(curl -sS -o /tmp/dt_licenses.json -w '%{http_code}' \
+        # Keep catalog lookup on v1 until a v2 license listing endpoint is available.
+        DT_LICENSES_FILE=$(mktemp)
+        DT_LICENSES_HEADERS_FILE=$(mktemp)
+        LICENSE_PAGE_SIZE=1000
+        LICENSES_HTTP=$(curl -sS -D "$DT_LICENSES_HEADERS_FILE" -o "$DT_LICENSES_FILE" -w '%{http_code}' \
+          --connect-timeout 10 --max-time 60 \
           -H "X-Api-Key: $DT_API_KEY" \
-          "$DT_BASE_URL/api/v1/license?pageSize=1000&sortName=licenseId&sortOrder=asc") || true
+          "$DT_BASE_URL/api/v1/license?pageSize=$LICENSE_PAGE_SIZE&sortName=licenseId&sortOrder=asc") || true
         
         if [[ "$LICENSES_HTTP" =~ ^2[0-9]{2}$ ]]; then
-          LICENSE_MAP=$(jq 'map(select(.licenseGroups | length > 0) | {(.licenseId): .licenseGroups[0].name}) | add // {}' /tmp/dt_licenses.json 2>/dev/null || echo '{}')
+          LICENSE_COUNT=$(jq 'length' "$DT_LICENSES_FILE" 2>/dev/null || echo "0")
+          LICENSE_TOTAL_HEADER=$(awk -F': ' 'tolower($1)=="x-total-count" {gsub("\r", "", $2); print $2}' "$DT_LICENSES_HEADERS_FILE" | tail -n1)
+          if [[ "$LICENSE_TOTAL_HEADER" =~ ^[0-9]+$ ]] && [[ "$LICENSE_TOTAL_HEADER" -gt "$LICENSE_PAGE_SIZE" ]]; then
+            echo "::warning::DT license check: License catalog appears truncated (X-Total-Count=${LICENSE_TOTAL_HEADER}, pageSize=${LICENSE_PAGE_SIZE})."
+          elif [[ "$LICENSE_COUNT" -eq "$LICENSE_PAGE_SIZE" ]]; then
+            echo "::warning::DT license check: License catalog may be truncated at pageSize=${LICENSE_PAGE_SIZE}."
+          fi
+          LICENSE_MAP=$(jq 'map(select(.licenseGroups | length > 0) | {(.licenseId): .licenseGroups[0].name}) | add // {}' "$DT_LICENSES_FILE" 2>/dev/null || echo '{}')
         else
           echo "::warning::DT license check: Failed to fetch license catalog (HTTP $LICENSES_HTTP), falling back to regex-based categorization."
           LICENSE_MAP='{}'
         fi
-        rm -f /tmp/dt_licenses.json
+        rm -f "$DT_LICENSES_FILE" "$DT_LICENSES_HEADERS_FILE"
 
         # Normalize components with DT-sourced license categories
         jq --argjson licenseMap "$LICENSE_MAP" '
@@ -177,10 +189,10 @@ runs:
             end;
 
           map(
-            (.resolvedLicense.licenseId // .license // "UNKNOWN_LICENSE") as $lic
+            ((.resolved_license.license_id // .license // "UNKNOWN_LICENSE") | tostring) as $lic
             | {
-              name: (.name // "UNKNOWN_COMPONENT"),
-              version: (.version // "UNKNOWN_VERSION"),
+              name: ((.name // "UNKNOWN_COMPONENT") | tostring),
+              version: ((.version // "UNKNOWN_VERSION") | tostring),
               license: $lic,
               category: (
                 if $lic == "UNKNOWN_LICENSE" then "Unknown"
@@ -209,6 +221,8 @@ runs:
           echo "| Category | License | Components | Instruction |"
           echo "|----------|---------|-----------:|-------------|"
           jq -r '
+            def clean_md: gsub("[<>|]"; "");
+
             def instruction(category; license):
               if (license == "UNKNOWN_LICENSE" or category == "Unknown") then "Verifiser at det ikke kreves vurdering av lisensen"
               elif category == "Non-Commercial" then "Krever godkjenning av lisensansvarlig"
@@ -219,7 +233,7 @@ runs:
 
             sort_by(.category, .license, .name)
             | group_by([.category, .license])
-            | map("| " + (.[0].category | gsub("[|]"; "\\|")) + " | " + (.[0].license | gsub("[|]"; "\\|")) + " | " + (length | tostring) + " | " + instruction(.[0].category; .[0].license) + " |")
+            | map("| " + (.[0].category | clean_md) + " | " + (.[0].license | clean_md) + " | " + (length | tostring) + " | " + instruction(.[0].category; .[0].license) + " |")
             | .[]
           ' "$NORMALIZED_FILE"
           echo ""
@@ -233,6 +247,8 @@ runs:
 
         if [[ "$TOTAL_COMPONENTS" -le "$DETAIL_LIMIT" ]]; then
           jq -r '
+            def clean_md: gsub("[<>|]"; "");
+
             def instruction(category; license):
               if (license == "UNKNOWN_LICENSE" or category == "Unknown") then "Must be classified in Dependency-Track"
               elif category == "Non-Commercial" then "Approval required"
@@ -244,8 +260,8 @@ runs:
             sort_by(.category, .license, .name)
             | group_by([.category, .license])
             | .[]
-            | "<details>\n<summary>" + (.[0].category | gsub("[|]"; "\\|")) + " | " + .[0].license + " (" + (length | tostring) + ")</summary>\n\n"
-              + (map("- " + (.name | gsub("[<>]"; "")) + " (" + .version + ")") | unique | join("\n"))
+            | "<details>\n<summary>" + (.[0].category | clean_md) + " | " + (.[0].license | clean_md) + " (" + (length | tostring) + ")</summary>\n\n"
+              + (map("- " + (.name | clean_md) + " (" + (.version | clean_md) + ")") | unique | join("\n"))
               + "\n\nInstruction: " + instruction(.[0].category; .[0].license) + "\n\n</details>\n"
           ' "$NORMALIZED_FILE" >> "$GITHUB_STEP_SUMMARY"
         else

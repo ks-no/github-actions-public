@@ -47,6 +47,7 @@ else
 
   for attempt in $(seq 1 "$RETRY_COUNT"); do
     PROJECT_JSON=$(curl -fsS \
+      --connect-timeout 10 --max-time 30 \
       -H "X-Api-Key: $DT_API_KEY" \
       "$BASE_URL/api/v1/project/lookup?name=$ENCODED_NAME&version=$ENCODED_VERSION" 2>/dev/null) || true
 
