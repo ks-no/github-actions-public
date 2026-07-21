@@ -165,18 +165,34 @@ runs:
           elif [[ "$LICENSE_COUNT" -eq "$LICENSE_PAGE_SIZE" ]]; then
             echo "::warning::DT license check: License catalog may be truncated at pageSize=${LICENSE_PAGE_SIZE}."
           fi
-          LICENSE_MAP=$(jq 'map(select(.licenseGroups | length > 0) | {(.licenseId): .licenseGroups[0].name}) | add // {}' "$DT_LICENSES_FILE" 2>/dev/null || echo '{}')
+          LICENSE_INFO_MAP=$(jq '
+            map({
+              key: (.licenseId // ""),
+              value: {
+                category: ((.licenseGroups[0].name // "") | tostring),
+                explanation: (
+                  (.licenseComments // .standardLicenseHeader // .name // "")
+                  | tostring
+                  | gsub("[\\r\\n]+"; " ")
+                  | gsub("[ \\t]+"; " ")
+                  | .[0:280]
+                )
+              }
+            })
+            | map(select(.key != ""))
+            | from_entries
+          ' "$DT_LICENSES_FILE" 2>/dev/null || echo '{}')
         else
           echo "::warning::DT license check: Failed to fetch license catalog (HTTP $LICENSES_HTTP), falling back to regex-based categorization."
-          LICENSE_MAP='{}'
+          LICENSE_INFO_MAP='{}'
         fi
         rm -f "$DT_LICENSES_FILE" "$DT_LICENSES_HEADERS_FILE"
 
         # Normalize components with DT-sourced license categories
-        jq --argjson licenseMap "$LICENSE_MAP" '
+        jq --argjson licenseInfoMap "$LICENSE_INFO_MAP" '
           def get_category($licenseId):
-            if $licenseMap | has($licenseId) then
-              $licenseMap[$licenseId]
+            if ($licenseInfoMap | has($licenseId)) and (($licenseInfoMap[$licenseId].category // "") != "") then
+              $licenseInfoMap[$licenseId].category
             else
               # Fallback regex categorization for unmapped licenses
               ($licenseId | ascii_downcase) as $v
@@ -188,17 +204,30 @@ runs:
                 end
             end;
 
+          def get_explanation($licenseId; $category):
+            if ($licenseInfoMap | has($licenseId)) and (($licenseInfoMap[$licenseId].explanation // "") != "") then
+              $licenseInfoMap[$licenseId].explanation
+            elif ($licenseId == "UNKNOWN_LICENSE" or $category == "Unknown") then
+              "No explanation found in Dependency-Track. Classify this license in the catalog."
+            elif ($category == "Non-Commercial") then
+              "License is marked non-commercial; approval is required before use in production."
+            elif ($category == "Copyleft") then
+              "Copyleft obligations may apply; review redistribution requirements before release."
+            elif ($category == "Weak Copyleft") then
+              "Weak copyleft obligations may apply; verify linking and distribution requirements."
+            else
+              "No additional license explanation available in Dependency-Track."
+            end;
+
           map(
             ((.resolved_license.license_id // .license // "UNKNOWN_LICENSE") | tostring) as $lic
+            | (if $lic == "UNKNOWN_LICENSE" then "Unknown" else get_category($lic) end) as $category
             | {
               name: ((.name // "UNKNOWN_COMPONENT") | tostring),
               version: ((.version // "UNKNOWN_VERSION") | tostring),
               license: $lic,
-              category: (
-                if $lic == "UNKNOWN_LICENSE" then "Unknown"
-                else get_category($lic)
-                end
-              )
+              category: $category,
+              explanation: get_explanation($lic; $category)
             }
           )
         ' "$COMPONENTS_FILE" > "$NORMALIZED_FILE"
@@ -261,6 +290,7 @@ runs:
             | group_by([.category, .license])
             | .[]
             | "<details>\n<summary>" + (.[0].category | clean_md) + " | " + (.[0].license | clean_md) + " (" + (length | tostring) + ")</summary>\n\n"
+              + "License explanation: " + (.[0].explanation | clean_md) + "\n\n"
               + (map("- " + (.name | clean_md) + " (" + (.version | clean_md) + ")") | unique | join("\n"))
               + "\n\nInstruction: " + instruction(.[0].category; .[0].license) + "\n\n</details>\n"
           ' "$NORMALIZED_FILE" >> "$GITHUB_STEP_SUMMARY"
