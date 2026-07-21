@@ -172,7 +172,7 @@ runs:
                 category: ((.licenseGroups[0].name // "") | tostring),
                 name: ((.name // "") | tostring),
                 explanation: (
-                  (.licenseText // "")
+                  (.licenseText // .licenseComments // .standardLicenseHeader // "")
                   | tostring
                   | gsub("[\\r\\n]+"; " ")
                   | gsub("[ \\t]+"; " ")
@@ -183,6 +183,66 @@ runs:
             | map(select(.key != ""))
             | from_entries
           ' "$DT_LICENSES_FILE" 2>/dev/null || echo '{}')
+
+          # Enrich explanations from per-license detail endpoint for licenses used by this project.
+          # This improves summary quality when catalog entries have empty/truncated explanation fields.
+          LICENSE_TEXT_FETCH_LIMIT=25
+          UNIQUE_LICENSES_FILE=$(mktemp)
+          jq -r '
+            map((.resolved_license.license_id // .license // "UNKNOWN_LICENSE") | tostring)
+            | unique
+            | .[]
+            | select(. != "" and . != "UNKNOWN_LICENSE")
+          ' "$COMPONENTS_FILE" > "$UNIQUE_LICENSES_FILE"
+
+          UNIQUE_LICENSE_COUNT=$(wc -l < "$UNIQUE_LICENSES_FILE" | tr -d ' ')
+          FETCHED_LICENSE_COUNT=0
+
+          if [[ "$UNIQUE_LICENSE_COUNT" -gt "$LICENSE_TEXT_FETCH_LIMIT" ]]; then
+            echo "::warning::DT license check: Limiting per-license text enrichment to ${LICENSE_TEXT_FETCH_LIMIT} of ${UNIQUE_LICENSE_COUNT} unique licenses."
+          fi
+
+          while IFS= read -r LICENSE_ID; do
+            if [[ "$FETCHED_LICENSE_COUNT" -ge "$LICENSE_TEXT_FETCH_LIMIT" ]]; then
+              break
+            fi
+            if [[ -z "$LICENSE_ID" ]]; then
+              continue
+            fi
+
+            DETAIL_FILE=$(mktemp)
+            ENCODED_LICENSE_ID=$(jq -rn --arg v "$LICENSE_ID" '$v | @uri')
+            DETAIL_HTTP=$(curl -sS -o "$DETAIL_FILE" -w '%{http_code}' \
+              --connect-timeout 10 --max-time 30 \
+              -H "X-Api-Key: $DT_API_KEY" \
+              "$DT_BASE_URL/api/v1/license/$ENCODED_LICENSE_ID") || true
+
+            if [[ "$DETAIL_HTTP" =~ ^2[0-9]{2}$ ]]; then
+              DETAIL_TEXT=$(jq -r '
+                (.licenseText // "")
+                | tostring
+                | gsub("[\\r\\n]+"; " ")
+                | gsub("[ \\t]+"; " ")
+                | if (length > 900) then ((.[0:900] | sub("\\s+\\S*$"; "")) + "...") else . end
+              ' "$DETAIL_FILE" 2>/dev/null || echo "")
+              DETAIL_NAME=$(jq -r '(.name // "") | tostring' "$DETAIL_FILE" 2>/dev/null || echo "")
+
+              if [[ -n "$DETAIL_TEXT" ]]; then
+                LICENSE_INFO_MAP=$(jq -c --arg k "$LICENSE_ID" --arg nm "$DETAIL_NAME" --arg exp "$DETAIL_TEXT" '
+                  .[$k] = (
+                    (.[$k] // {category:"", name:"", explanation:""})
+                    | .name = (if $nm != "" then $nm else (.name // "") end)
+                    | .explanation = $exp
+                  )
+                ' <<< "$LICENSE_INFO_MAP" 2>/dev/null || echo "$LICENSE_INFO_MAP")
+              fi
+            fi
+
+            rm -f "$DETAIL_FILE"
+            FETCHED_LICENSE_COUNT=$((FETCHED_LICENSE_COUNT + 1))
+          done < "$UNIQUE_LICENSES_FILE"
+
+          rm -f "$UNIQUE_LICENSES_FILE"
         else
           echo "::warning::DT license check: Failed to fetch license catalog (HTTP $LICENSES_HTTP), falling back to regex-based categorization."
           LICENSE_INFO_MAP='{}'
