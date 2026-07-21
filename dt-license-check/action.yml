@@ -172,7 +172,7 @@ runs:
                 category: ((.licenseGroups[0].name // "") | tostring),
                 name: ((.name // "") | tostring),
                 explanation: (
-                  (.licenseText // .licenseComments // .standardLicenseHeader // "")
+                  (.licenseText // "")
                   | tostring
                   | gsub("[\\r\\n]+"; " ")
                   | gsub("[ \\t]+"; " ")
@@ -297,7 +297,7 @@ runs:
                 + baseUrl
                 + "/licenses/"
                 + (license | @uri)
-                + "/licenseText)"
+                + "/licenseText)\n\n"
               end;
 
             sort_by(.category, .license, .name)
