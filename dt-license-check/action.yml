@@ -170,12 +170,13 @@ runs:
               key: (.licenseId // ""),
               value: {
                 category: ((.licenseGroups[0].name // "") | tostring),
+                name: ((.name // "") | tostring),
                 explanation: (
-                  (.licenseComments // .standardLicenseHeader // .name // "")
+                  (.licenseText // .licenseComments // .standardLicenseHeader // "")
                   | tostring
                   | gsub("[\\r\\n]+"; " ")
                   | gsub("[ \\t]+"; " ")
-                  | .[0:280]
+                  | if (length > 320) then ((.[0:320] | sub("\\s+\\S*$"; "")) + "...") else . end
                 )
               }
             })
@@ -205,8 +206,12 @@ runs:
             end;
 
           def get_explanation($licenseId; $category):
-            if ($licenseInfoMap | has($licenseId)) and (($licenseInfoMap[$licenseId].explanation // "") != "") then
-              $licenseInfoMap[$licenseId].explanation
+            (($licenseInfoMap[$licenseId].name // "") | tostring) as $licenseName
+            | if ($licenseInfoMap | has($licenseId)) and (($licenseInfoMap[$licenseId].explanation // "") != "") then
+                "License "
+                + (if $licenseName != "" then $licenseName + " (" + $licenseId + ")" else $licenseId end)
+                + ": "
+                + $licenseInfoMap[$licenseId].explanation
             elif ($licenseId == "UNKNOWN_LICENSE" or $category == "Unknown") then
               "No explanation found in Dependency-Track. Classify this license in the catalog."
             elif ($category == "Non-Commercial") then
