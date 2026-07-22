@@ -1,5 +1,9 @@
-name: Build and Deploy Java Service
-description: Builds a Java application, publishes a Docker image, and deploys it to OpenShift via Helm. Supports snapshot and release builds with configurable environments.
+# Java service build and deploy template.
+# Required secrets: ARTIFACTORY_USERNAME, ARTIFACTORY_PASSWORD, KS_RUNNER_APP_ID,
+# KS_RUNNER_PRIVATE_KEY, GPG_PRIVATE_KEY, DEPENDENCY_TRACK_API_KEY.
+# Use version OR semver_increment, then set helm_chart only if you want Helm publish/deploy.
+# This template is meant to be copied into .github/workflows/ in the target repo.
+name: Java Service Build and Deploy
 
 on:
   push:
@@ -7,18 +11,68 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      semver_increment:
+        description: 'Choose the next version bump when version is empty. Mutually exclusive with version.'
+        type: choice
+        required: false
+        options:
+          - ''
+          - next major
+          - next minor
+          - next patch
       is_release:
         description: 'Release build?'
         type: boolean
         default: false
       version:
-        description: 'Version number for release (e.g. 1.2.3). Leave empty for auto.'
+        description: 'Version number for release (e.g. 1.2.3). Leave empty when using semver_increment.'
         type: string
         required: false
-      environment:
-        description: 'Deploy environment'
+      java_version:
+        description: 'Java version to use (for example java21).'
         type: string
+        required: false
+        default: 'java21'
+      helm_chart:
+        description: 'Helm chart name. Leave empty to skip Helm publish and deployment.'
+        type: string
+        required: false
+        default: ''
+      environment:
+        description: 'Deployment environment.'
+        type: string
+        required: false
         default: 'dev'
+      path:
+        description: 'Path to the Dockerfile.'
+        type: string
+        required: false
+        default: '.'
+      docker_args:
+        description: 'Extra arguments passed to docker build.'
+        type: string
+        required: false
+        default: ''
+      autodeploy:
+        description: 'Deploy automatically after build when helm_chart is set.'
+        type: boolean
+        required: false
+        default: false
+      reviewer:
+        description: 'Reviewer used when creating release notes.'
+        type: string
+        required: false
+        default: ''
+      helm_folder:
+        description: 'Folder containing the Helm chart. Defaults to the chart name when empty.'
+        type: string
+        required: false
+        default: ''
+      big_runner:
+        description: 'Use a larger self-hosted runner when true.'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   id-token: write
@@ -28,22 +82,17 @@ permissions:
 jobs:
   build:
     uses: ks-no/github-actions-public/.github/workflows/java-service-build.yml@main
-    secrets:
-      ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
-      ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
-      KS_RUNNER_APP_ID: ${{ secrets.KS_RUNNER_APP_ID }}
-      KS_RUNNER_PRIVATE_KEY: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
-      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-      DEPENDENCY_TRACK_API_KEY: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+    secrets: inherit
     with:
+      semver_increment: ${{ inputs.semver_increment || '' }}
       is_release: ${{ inputs.is_release || false }}
       version: ${{ inputs.version || '' }}
+      java_version: ${{ inputs.java_version || 'java21' }}
+      helm_chart: ${{ inputs.helm_chart || '' }}
       environment: ${{ inputs.environment || 'dev' }}
-      # Optional (copy-edit): uncomment to enable deployment after successful build and publish.
-      # autodeploy: true
-      # Optional (copy-edit): uncomment to enable Helm publish/deploy and set chart name.
-      # helm_chart: 'my-service'
-      # Optional (copy-edit): uncomment to override chart location if not in charts/{helm_chart}.
-      # helm_folder: 'charts/my-service'
-      # Optional (copy-edit): uncomment to set reviewer used for release pull request flow.
-      # reviewer: 'team-platform'
+      path: ${{ inputs.path || '.' }}
+      docker_args: ${{ inputs.docker_args || '' }}
+      autodeploy: ${{ inputs.autodeploy || false }}
+      reviewer: ${{ inputs.reviewer || '' }}
+      helm_folder: ${{ inputs.helm_folder || '' }}
+      big_runner: ${{ inputs.big_runner || false }}

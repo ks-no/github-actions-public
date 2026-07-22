@@ -1,0 +1,76 @@
+# Java library build template for Maven Central publishing.
+# Required secrets: ARTIFACTORY_USERNAME, ARTIFACTORY_PASSWORD, KS_RUNNER_APP_ID,
+# KS_RUNNER_PRIVATE_KEY, DEPENDENCY_TRACK_API_KEY, KS_CODESIGN_COMBO,
+# KS_CODESIGN_COMBO_PASSWD, SONATYPE_OSSRH_SETTINGS_XML.
+# Use version OR semver_increment. maven_settings_xml can override the secret.
+name: Java Library Maven Central Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      java_version:
+        description: 'Java version to use (for example java21).'
+        type: string
+        required: false
+        default: 'java21'
+      is_release:
+        description: 'Release build?'
+        type: boolean
+        required: false
+        default: false
+      version:
+        description: 'Version number for release (e.g. 1.2.3). Leave empty when using semver_increment.'
+        type: string
+        required: false
+        default: ''
+      semver_increment:
+        description: 'Choose the next version bump when version is empty. Mutually exclusive with version.'
+        type: choice
+        required: false
+        options:
+          - ''
+          - next major
+          - next minor
+          - next patch
+      reviewer:
+        description: 'Optional reviewer for the release.'
+        type: string
+        required: false
+        default: ''
+      maven_settings_xml:
+        description: 'Maven settings.xml content or base64-encoded settings.'
+        type: string
+        required: false
+        default: ''
+      component_test_project:
+        description: 'GitHub repo name under ks-no for component tests. Leave empty to skip.'
+        type: string
+        required: false
+        default: ''
+      component_test_version:
+        description: 'Version to use for component tests. Leave empty to use the built version.'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  id-token: write
+  contents: write
+  checks: write
+
+jobs:
+  build:
+    uses: ks-no/github-actions-public/.github/workflows/java-library-maven-central-build.yml@main
+    secrets: inherit
+    with:
+      java_version: ${{ inputs.java_version || 'java21' }}
+      is_release: ${{ inputs.is_release || false }}
+      version: ${{ inputs.version || '' }}
+      semver_increment: ${{ inputs.semver_increment || '' }}
+      reviewer: ${{ inputs.reviewer || '' }}
+      maven_settings_xml: ${{ inputs.maven_settings_xml || '' }}
+      component_test_project: ${{ inputs.component_test_project || '' }}
+      component_test_version: ${{ inputs.component_test_version || '' }}

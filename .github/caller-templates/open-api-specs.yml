@@ -1,0 +1,32 @@
+# OpenAPI spec publishing template.
+# Required secrets: KS_RUNNER_APP_ID and KS_RUNNER_PRIVATE_KEY.
+# Set specs_folder if your specs are not in ./specs, and use ignore_specs to skip generated files.
+name: OpenAPI Spec CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      specs_folder:
+        description: 'Folder containing OpenAPI specs.'
+        type: string
+        required: false
+        default: 'specs'
+      ignore_specs:
+        description: 'Comma-separated list of spec filenames to exclude from publishing.'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  open-api-spec-ci:
+    uses: ks-no/github-actions-public/.github/workflows/open-api-specs.yml@main
+    secrets: inherit
+    with:
+      specs_folder: ${{ inputs.specs_folder || 'specs' }}
+      ignore_specs: ${{ inputs.ignore_specs || '' }}
