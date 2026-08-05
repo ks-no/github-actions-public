@@ -1,0 +1,19 @@
+name: 'Set up Java'
+description: 'Wrapper for actions/setup-java, pinned to SHA'
+
+inputs:
+  java-version:
+    description: 'What version of Java to use'
+    required: true
+  distribution:
+    description: 'What Java distribution to use'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Java
+      uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: ${{ inputs.distribution }}
