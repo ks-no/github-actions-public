@@ -46,7 +46,7 @@ runs:
         ks_github_app_private_key: ${{ inputs.ks_github_app_private_key }}
 
     - name: Checkout code
-      uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 #v6.0.2
+      uses: ks-no/github-actions-public/checkout@main
       with:
         submodules: true
         fetch-depth: 0

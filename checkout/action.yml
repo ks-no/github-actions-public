@@ -1,6 +1,15 @@
 name: 'Checkout'
 description: 'Composite action for checking out code, pinned to a specific SHA of actions/checkout.'
 inputs:
+  repository:
+    description: 'Which repository (with owner) to check out. Defaults to the triggering repo.'
+    required: false
+  ref:
+    description: 'A Git ref, to the branch/tag/commit to check out. Defaults to the triggering ref.'
+    required: false
+  path:
+    description: 'The path in the repo to check out. Defaults to `.`'
+    required: false
   token:
     description: 'GitHub token or app token to use for checkout'
     required: false
@@ -27,6 +36,9 @@ runs:
     - name: Checkout code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
+        repository: ${{ inputs.repository }}
+        ref: ${{ inputs.ref }}
+        path: ${{ inputs.path }}
         clean: ${{ inputs.clean }}
         token: ${{ inputs.token }}
         submodules: ${{ inputs.submodules }}

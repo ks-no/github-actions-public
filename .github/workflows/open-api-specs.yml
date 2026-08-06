@@ -125,7 +125,7 @@ jobs:
 
       - name: Checkout ks-no.github.io repository
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: ks-no/github-actions-public/checkout@main
         with:
           repository: ks-no/ks-no.github.io
           token: ${{ steps.setup_github_app.outputs.app_token }}
