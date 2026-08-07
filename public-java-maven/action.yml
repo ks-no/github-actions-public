@@ -54,7 +54,7 @@ runs:
         fetch-tags: true
 
     - name: Switch Java Version
-      uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 #v5.2.0
+      uses: ks-no/github-actions-public/setup-java@main
       with:
         distribution: 'temurin'
         java-version: ${{ inputs.java_version }}
