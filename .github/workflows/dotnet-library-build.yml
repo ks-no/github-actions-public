@@ -174,7 +174,7 @@ jobs:
 
       - name: Upload SBOM
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: actions/upload-artifact@v7
+        uses: ks-no/github-actions-public/upload-artifact@main
         with:
           name: sbom
           path: bom.json
@@ -221,7 +221,7 @@ jobs:
       # Keep the unsigned candidate for the publish job (signing + nuget.org push).
       - name: Upload unsigned packages
         if: inputs.is-release || inputs.push-to-nuget-org
-        uses: actions/upload-artifact@v7
+        uses: ks-no/github-actions-public/upload-artifact@main
         with:
           name: nuget-packages-unsigned
           path: staging/
