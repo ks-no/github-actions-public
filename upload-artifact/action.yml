@@ -11,6 +11,7 @@ inputs:
   if-no-files-found:
     description: 'What to return if there are no files (possible values: "warn", "error" and "ignore").'
     required: false
+    default: 'warn'
 
 
 
