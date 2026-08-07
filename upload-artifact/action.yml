@@ -8,6 +8,9 @@ inputs:
   name:
     description: 'Under what name should the artifact be stored'
     required: false
+  if-no-files-found:
+    description: 'What to return if there are no files (possible values: "warn", "error" and "ignore").'
+    required: false
 
 
 
@@ -19,3 +22,4 @@ runs:
       with:
         path: ${{ inputs.path }}
         name: ${{ inputs.name }}
+        if-no-files-found: ${{ inputs.if-no-files-found }}
