@@ -30,6 +30,11 @@ inputs:
     description: 'Whether to execute `git clean -ffdx && git reset --hard HEAD` before fetching'
     required: false
     default: 'true'
+  persist-credentials:
+    description: 'Whether to configure the token or SSH key with the local git config'
+    required: false
+    default: 'true'
+
 runs:
   using: 'composite'
   steps:
@@ -41,6 +46,7 @@ runs:
         path: ${{ inputs.path }}
         clean: ${{ inputs.clean }}
         token: ${{ inputs.token }}
+        persist-credentials: ${{ inputs.persist-credentials }}
         submodules: ${{ inputs.submodules }}
         fetch-depth: ${{ inputs.fetch-depth }}
         fetch-tags: ${{ inputs.fetch-tags }}

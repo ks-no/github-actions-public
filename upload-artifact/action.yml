@@ -15,9 +15,7 @@ inputs:
   include-hidden-files:
     description: "Whether to include hidden files in artifact"
     required: false
-    default: false
-
-
+    default: 'false'
 
 runs:
   using: composite
