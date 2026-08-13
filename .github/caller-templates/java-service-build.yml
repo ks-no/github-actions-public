@@ -52,6 +52,8 @@ jobs:
       is_release: ${{ github.event_name == 'workflow_dispatch' && inputs.is_release || false }}
       version: ${{ inputs.version || '' }}
       java_version: 'java21'
-      helm_chart: ${{ github.event.repository.name }}
+      # Add a Helm chart to this repo, then set helm_chart to its folder name to
+      # enable chart publishing and the 'deploy' input below. Left empty, both are skipped.
+      helm_chart: ''
       autodeploy: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy || false }}
       reviewer: ${{ inputs.reviewer || '' }}

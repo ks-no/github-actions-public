@@ -27,6 +27,7 @@ jobs:
     uses: ks-no/github-actions-public/.github/workflows/deploy.yml@main
     secrets: inherit
     with:
+      # Defaults to the repo name; change if your chart is named differently.
       helm_chart: ${{ github.event.repository.name }}
       environment: ${{ inputs.environment }}
       version: ${{ inputs.version }}

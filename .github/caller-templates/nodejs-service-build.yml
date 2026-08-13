@@ -18,5 +18,7 @@ jobs:
     uses: ks-no/github-actions-public/.github/workflows/nodejs-service-build.yml@main
     secrets: inherit
     with:
-      helm_chart: ${{ github.event.repository.name }}
+      # Add a chart under charts/<name>, then set helm_chart to <name> to enable
+      # chart publishing and deployment. Left empty, both are skipped.
+      helm_chart: ''
       ks_runner_app_id: ${{ vars.KS_RUNNER_APP_ID }}
