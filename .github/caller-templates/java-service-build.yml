@@ -1,9 +1,7 @@
-# Java service build and deploy template.
-# Required secrets: ARTIFACTORY_USERNAME, ARTIFACTORY_PASSWORD, KS_RUNNER_APP_ID,
-# KS_RUNNER_PRIVATE_KEY, GPG_PRIVATE_KEY, DEPENDENCY_TRACK_API_KEY.
-# Use version OR semver_increment, then set helm_chart only if you want Helm publish/deploy.
-# This template is meant to be copied into .github/workflows/ in the target repo.
-name: Java Service Build and Deploy
+# Backstage starter workflow for a Java service.
+# Required secrets: ARTIFACTORY_USERNAME, ARTIFACTORY_PASSWORD, KS_RUNNER_APP_ID, KS_RUNNER_PRIVATE_KEY,
+# GPG_PRIVATE_KEY, DEPENDENCY_TRACK_API_KEY.
+name: Build and deploy application
 
 on:
   push:
@@ -11,8 +9,13 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      is_release:
+        description: 'Release build?'
+        type: boolean
+        required: false
+        default: false
       semver_increment:
-        description: 'Choose the next version bump when version is empty. Mutually exclusive with version.'
+        description: 'Select semver increment. Leave empty when version is set.'
         type: choice
         required: false
         options:
@@ -20,59 +23,20 @@ on:
           - next major
           - next minor
           - next patch
-      is_release:
-        description: 'Release build?'
-        type: boolean
-        default: false
       version:
-        description: 'Version number for release (e.g. 1.2.3). Leave empty when using semver_increment.'
+        description: 'Exact release version. Leave empty when using semver_increment.'
         type: string
         required: false
-      java_version:
-        description: 'Java version to use (for example java21).'
-        type: string
-        required: false
-        default: 'java21'
-      helm_chart:
-        description: 'Helm chart name. Leave empty to skip Helm publish and deployment.'
-        type: string
-        required: false
-        default: ''
-      environment:
-        description: 'Deployment environment.'
-        type: string
-        required: false
-        default: 'dev'
-      path:
-        description: 'Path to the Dockerfile.'
-        type: string
-        required: false
-        default: '.'
-      docker_args:
-        description: 'Extra arguments passed to docker build.'
-        type: string
-        required: false
-        default: ''
-      autodeploy:
-        description: 'Deploy automatically after build when helm_chart is set.'
+      deploy:
+        description: 'Deploy after the release build finishes.'
         type: boolean
-        required: false
+        required: true
         default: false
       reviewer:
         description: 'Reviewer used when creating release notes.'
         type: string
         required: false
         default: ''
-      helm_folder:
-        description: 'Folder containing the Helm chart. Defaults to the chart name when empty.'
-        type: string
-        required: false
-        default: ''
-      big_runner:
-        description: 'Use a larger self-hosted runner when true.'
-        type: boolean
-        required: false
-        default: false
 
 permissions:
   id-token: write
@@ -85,14 +49,9 @@ jobs:
     secrets: inherit
     with:
       semver_increment: ${{ inputs.semver_increment || '' }}
-      is_release: ${{ inputs.is_release || false }}
+      is_release: ${{ github.event_name == 'workflow_dispatch' && inputs.is_release || false }}
       version: ${{ inputs.version || '' }}
-      java_version: ${{ inputs.java_version || 'java21' }}
-      helm_chart: ${{ inputs.helm_chart || '' }}
-      environment: ${{ inputs.environment || 'dev' }}
-      path: ${{ inputs.path || '.' }}
-      docker_args: ${{ inputs.docker_args || '' }}
-      autodeploy: ${{ inputs.autodeploy || false }}
+      java_version: 'java21'
+      helm_chart: ${{ github.event.repository.name }}
+      autodeploy: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy || false }}
       reviewer: ${{ inputs.reviewer || '' }}
-      helm_folder: ${{ inputs.helm_folder || '' }}
-      big_runner: ${{ inputs.big_runner || false }}

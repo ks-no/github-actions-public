@@ -1,17 +1,10 @@
-# Standalone Helm deploy template.
-# Required secrets: KS_RUNNER_APP_ID and KS_RUNNER_PRIVATE_KEY.
-# Copy into a target repo when you want to deploy an already-published version.
-name: Deploy Helm Chart
-# For repos with a single service, consider hardcoding helm_chart in the with: block
-# and removing it from inputs — see fiks-konfigurasjon for an example.
+# Backstage starter workflow for deploying a single service.
+# Required secrets: KS_RUNNER_APP_ID, KS_RUNNER_PRIVATE_KEY.
+name: Deploy application
 
 on:
   workflow_dispatch:
     inputs:
-      helm_chart:
-        description: 'Helm chart name to deploy.'
-        type: string
-        required: true
       environment:
         description: 'Deployment environment.'
         type: choice
@@ -34,6 +27,6 @@ jobs:
     uses: ks-no/github-actions-public/.github/workflows/deploy.yml@main
     secrets: inherit
     with:
-      helm_chart: ${{ inputs.helm_chart }}
+      helm_chart: ${{ github.event.repository.name }}
       environment: ${{ inputs.environment }}
       version: ${{ inputs.version }}

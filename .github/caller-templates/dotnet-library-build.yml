@@ -1,8 +1,6 @@
-# .NET library build template.
-# Required secrets: ARTIFACTORY_USERNAME, ARTIFACTORY_PASSWORD, NUGET_API_KEY,
-# KS_RUNNER_APP_ID, KS_RUNNER_PRIVATE_KEY, DEPENDENCY_TRACK_API_KEY.
-# Set is-release for releases; use push-to-nuget-org only for unsigned prerelease publishing.
-name: .NET Library Build
+# Backstage starter workflow for a .NET library.
+# Required secrets: ARTIFACTORY_USERNAME, ARTIFACTORY_PASSWORD, KS_RUNNER_PRIVATE_KEY, DEPENDENCY_TRACK_API_KEY.
+name: .NET Library Build and Release
 
 on:
   push:
@@ -10,69 +8,28 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      is-release:
+      isRelease:
         description: 'Release build?'
         type: boolean
+        required: false
         default: false
-      push-to-nuget-org:
+      pushToNugetOrg:
         description: 'Push to nuget.org?'
         type: boolean
+        required: false
         default: false
-      specified-version:
-        description: 'Explicit version to release (for example 1.2.3). Leave empty to auto-calculate.'
-        type: string
+      specifiedVersion:
+        description: 'Version (X.X.X). Leave empty for auto.'
         required: false
         default: ''
-      release-notes:
-        description: 'Release notes used when creating the release.'
-        type: string
+      releaseNotes:
+        description: 'Release notes.'
         required: false
         default: 'No changes specified'
       reviewer:
-        description: 'Reviewer name for release notes and approvals.'
-        type: string
+        description: 'Reviewer name.'
         required: false
         default: 'No review required'
-      dotnet-version:
-        description: '.NET SDK version to use.'
-        type: string
-        required: false
-        default: '8.0.x'
-      run-windows-build:
-        description: 'Run the parallel Windows build.'
-        type: boolean
-        required: false
-        default: true
-      integration-test-repo:
-        description: 'GitHub repo name under ks-no for integration tests.'
-        type: string
-        required: false
-        default: ''
-      integration-test-workflow:
-        description: 'Workflow file in the integration test repo.'
-        type: string
-        required: false
-        default: ''
-      integration-test-package-name:
-        description: 'NuGet package name used by the integration tests.'
-        type: string
-        required: false
-        default: ''
-      windows-restore-args:
-        description: 'Additional restore arguments for the Windows build.'
-        type: string
-        required: false
-        default: ''
-      windows-test-verbosity:
-        description: 'Test verbosity for the Windows build.'
-        type: string
-        required: false
-        default: 'normal'
-      allow-prerelease:
-        description: 'Comma-separated package IDs allowed to be prerelease.'
-        type: string
-        required: false
-        default: ''
 
 permissions:
   contents: write
@@ -83,16 +40,10 @@ jobs:
     uses: ks-no/github-actions-public/.github/workflows/dotnet-library-build.yml@main
     secrets: inherit
     with:
-      is-release: ${{ inputs.is-release || false }}
-      push-to-nuget-org: ${{ inputs.push-to-nuget-org || false }}
-      specified-version: ${{ inputs.specified-version || '' }}
-      release-notes: ${{ inputs.release-notes || 'No changes specified' }}
+      is-release: ${{ github.event_name == 'workflow_dispatch' && inputs.isRelease || false }}
+      push-to-nuget-org: ${{ github.event_name == 'workflow_dispatch' && inputs.pushToNugetOrg || false }}
+      specified-version: ${{ github.event_name == 'workflow_dispatch' && inputs.specifiedVersion || '' }}
+      release-notes: ${{ github.event_name == 'workflow_dispatch' && inputs.releaseNotes || 'No changes specified' }}
       reviewer: ${{ inputs.reviewer || 'No review required' }}
-      dotnet-version: ${{ inputs.dotnet-version || '8.0.x' }}
-      run-windows-build: ${{ inputs.run-windows-build }}
-      integration-test-repo: ${{ inputs.integration-test-repo || '' }}
-      integration-test-workflow: ${{ inputs.integration-test-workflow || '' }}
-      integration-test-package-name: ${{ inputs.integration-test-package-name || '' }}
-      windows-restore-args: ${{ inputs.windows-restore-args || '' }}
-      windows-test-verbosity: ${{ inputs.windows-test-verbosity || 'normal' }}
-      allow-prerelease: ${{ inputs.allow-prerelease || '' }}
+      dotnet-version: '8.0.x'
+      run-windows-build: true

@@ -1,79 +1,13 @@
-# Node.js service build and deploy template.
+# Backstage starter workflow for a Node.js service.
 # Required secrets: ARTIFACTORY_USERNAME, ARTIFACTORY_PASSWORD, GPG_PRIVATE_KEY, KS_RUNNER_PRIVATE_KEY.
-# Fill app_name/helm_chart when you want Docker + Helm publish; leave helm_chart empty to skip deploy.
-name: Node.js Service Build and Deploy
+# Required repo/org variable: KS_RUNNER_APP_ID (GitHub App ID, not a secret).
+name: Build and deploy Node.js service
 
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
-    inputs:
-      app_name:
-        description: 'Application/image name. Defaults to the repository name when empty.'
-        type: string
-        required: false
-        default: ''
-      helm_chart:
-        description: 'Helm chart name. Leave empty to skip Helm publish and deployment.'
-        type: string
-        required: false
-        default: ''
-      helm_folder:
-        description: 'Folder containing the Helm chart. Defaults to charts/{helm_chart} when empty.'
-        type: string
-        required: false
-        default: ''
-      docker_registry:
-        description: 'Docker registry hostname.'
-        type: string
-        required: false
-        default: 'docker-all.artifactory.fiks.ks.no'
-      environment:
-        description: 'Deployment environment.'
-        type: string
-        required: false
-        default: 'dev'
-      autodeploy:
-        description: 'Deploy automatically after publish when helm_chart is set.'
-        type: boolean
-        required: false
-        default: true
-      node_version:
-        description: 'Node.js version, reserved for future use.'
-        type: string
-        required: false
-        default: '22'
-      dockerfile_path:
-        description: 'Path to Dockerfile.'
-        type: string
-        required: false
-        default: './Dockerfile'
-      build_context:
-        description: 'Docker build context path.'
-        type: string
-        required: false
-        default: '.'
-      push_latest_on_main:
-        description: 'Publish a latest tag on main.'
-        type: boolean
-        required: false
-        default: true
-      buildx_builder_image:
-        description: 'BuildKit image used by docker/setup-buildx-action.'
-        type: string
-        required: false
-        default: 'moby/buildkit:v0.21.0'
-      buildx_network:
-        description: 'Network mode used by Buildx driver.'
-        type: string
-        required: false
-        default: 'host'
-      ks_runner_app_id:
-        description: 'GitHub App ID used by the deploy action.'
-        type: string
-        required: false
-        default: ''
 
 permissions:
   id-token: write
@@ -84,16 +18,5 @@ jobs:
     uses: ks-no/github-actions-public/.github/workflows/nodejs-service-build.yml@main
     secrets: inherit
     with:
-      app_name: ${{ inputs.app_name || '' }}
-      helm_chart: ${{ inputs.helm_chart || '' }}
-      helm_folder: ${{ inputs.helm_folder || '' }}
-      docker_registry: ${{ inputs.docker_registry || 'docker-all.artifactory.fiks.ks.no' }}
-      environment: ${{ inputs.environment || 'dev' }}
-      autodeploy: ${{ inputs.autodeploy }}
-      node_version: ${{ inputs.node_version || '22' }}
-      dockerfile_path: ${{ inputs.dockerfile_path || './Dockerfile' }}
-      build_context: ${{ inputs.build_context || '.' }}
-      push_latest_on_main: ${{ inputs.push_latest_on_main }}
-      buildx_builder_image: ${{ inputs.buildx_builder_image || 'moby/buildkit:v0.21.0' }}
-      buildx_network: ${{ inputs.buildx_network || 'host' }}
-      ks_runner_app_id: ${{ inputs.ks_runner_app_id || '' }}
+      helm_chart: ${{ github.event.repository.name }}
+      ks_runner_app_id: ${{ vars.KS_RUNNER_APP_ID }}

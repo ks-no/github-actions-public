@@ -1,27 +1,14 @@
-# Zizmor workflow audit template.
-# No secrets required. Use output_format=sarif only if you want results in the Security tab.
+# Starter workflow for zizmor.
 name: Zizmor Security Audit
 
 on:
   push:
   pull_request:
   workflow_dispatch:
-    inputs:
-      output_format:
-        description: 'Output format for Zizmor. Use sarif to upload to the GitHub Security tab, or leave as github for inline annotations.'
-        type: choice
-        required: false
-        options:
-          - github
-          - sarif
-        default: github
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   audit:
     uses: ks-no/github-actions-public/.github/workflows/zizmor-audit.yml@main
-    with:
-      output_format: ${{ inputs.output_format || 'github' }}
