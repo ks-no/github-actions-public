@@ -1,5 +1,5 @@
 name: 'Main Java Library Build for public Maven Releases'
-description: 'eusable workflow that orchestrates building, testing, publishing and promoting a public Java library.'
+description: 'Reusable workflow that orchestrates building, testing, publishing and promoting a public Java library.'
 
 on:
   workflow_call:
@@ -7,7 +7,7 @@ on:
       java_version:
         description: 'The Java version to use.'
         type: string
-        required: true
+        required: false
         default: 'java21'
       is_release:
         description: 'Whether to perform a release build.'
