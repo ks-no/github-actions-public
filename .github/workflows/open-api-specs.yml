@@ -13,6 +13,11 @@ on:
         required: false
         type: string
         default: ''
+      is_public:
+        description: 'Is this repository public?'
+        type: boolean
+        required: false
+        default: false
     secrets:
       KS_RUNNER_APP_ID:
         description: 'ID for the GitHub App.'
@@ -27,7 +32,7 @@ concurrency:
 
 jobs:
   check-spec-changes:
-    runs-on: [self-hosted, x64]
+    runs-on: ${{ inputs.is_public && 'ubuntu-latest' || fromJSON('["self-hosted", "x64"]') }}
     timeout-minutes: 2
     outputs:
       changed: ${{ steps.check.outputs.changed }}
