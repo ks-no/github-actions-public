@@ -62,6 +62,11 @@ on:
         required: false
         type: boolean
         default: false
+      trunk:
+        description: "The ref name of the repo's default branch"
+        type: string
+        required: false
+        default: 'main'
 
 permissions:
   id-token: write
@@ -204,7 +209,7 @@ jobs:
           helm_chart_prov_url: ${{ steps.publish_helm.outputs.helm_chart_prov_url }}
 
       - name: 'SBOM Upload and Report'
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        if: github.ref_name == inputs.trunk || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
         uses: ks-no/github-actions-public/sbom-upload-and-report@main
         with:
           dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
