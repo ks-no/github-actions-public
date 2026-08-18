@@ -55,20 +55,20 @@ jobs:
             exit 0
           fi
           IFS=',' read -ra folders <<< "$SPECS_FOLDER"
-          NO_CHANGE=0
+          CHANGE=0
           for folder in ${folders[@]} ; do
-            git rev-parse HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- "$folder" # run to capture exit code; 0 (success) if 
-            NO_CHANGE=$((NO_CHANGE || $?)) # Boolean arithmetic is opposite of conditional evaluation (0 is false, all else is true)
+            git rev-parse HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- "$folder" # run to capture exit code; 0 (success) if no change
+            CHANGE=$((CHANGE || $?)) # Boolean arithmetic is opposite of conditional evaluation (0 is false, all else is true)
           done
-          if $NO_CHANGE ; then
+          if ((CHANGE)) ; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
             echo "changed=false" >> "$GITHUB_OUTPUT"
             {
               echo "### OpenAPI Spec CI"
               echo ""
               echo "Hoppet over — ingen endringer i \`$SPECS_FOLDER\` i siste commit."
             } >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
   open-api-spec-ci:
