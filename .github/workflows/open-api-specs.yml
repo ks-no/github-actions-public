@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       specs_folder:
-        description: 'Folder for OpenAPI specs (default: "specs").'
+        description: 'Comma-separated list of folders for OpenAPI specs (default: "specs").'
         required: false
         type: string
         default: 'specs'
@@ -54,7 +54,13 @@ jobs:
             echo "Manuell kjøring (workflow_dispatch) — kjører uansett."
             exit 0
           fi
-          if git rev-parse HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- "$SPECS_FOLDER"; then
+          IFS=',' read -ra folders <<< "$SPECS_FOLDER"
+          NO_CHANGE=0
+          for folder in ${folders[@]} ; do
+            git rev-parse HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- "$folder" # run to capture exit code; 0 (success) if 
+            NO_CHANGE=$((NO_CHANGE || $?)) # Boolean arithmetic is opposite of conditional evaluation (0 is false, all else is true)
+          done
+          if $NO_CHANGE ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             {
               echo "### OpenAPI Spec CI"
@@ -88,7 +94,13 @@ jobs:
       - name: Get spec files
         id: spec_files
         shell: bash
-        run: echo "files=$(ls ${{ inputs.specs_folder }}/*.json | tr '\n' ' ')" >> $GITHUB_OUTPUT
+        run: |
+          echo 'files<<QUOTE' >> $GITHUB_OUTPUT # weird heredoc-esque strategy for multiline output vars
+          IFS=',' read -ra folders <<< "$SPECS_FOLDER"
+          for folder in ${folders[@]} ; do
+            ls ${{ inputs.specs_folder }}/*.json | tr '\n' ' ' >> "$GITHUB_OUTPUT"
+          done
+          echo 'QUOTE' >> "$GITHUB_OUTPUT" # "files" ends up containing both spaces and newlines, but this is not a problem
 
       - name: Lint specs
         shell: bash
