@@ -57,18 +57,19 @@ jobs:
           IFS=',' read -ra folders <<< "$SPECS_FOLDER"
           CHANGE=0
           for folder in ${folders[@]} ; do
-            git rev-parse HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- "$folder" # run to capture exit code; 0 (success) if no change
-            CHANGE=$((CHANGE || $?)) # Boolean arithmetic is opposite of conditional evaluation (0 is false, all else is true)
+            if ! (git rev-parse HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- "$folder") ; then # fail if changed
+              echo "$folder changed"
+              CHANGE=1 # Boolean arithmetic is opposite of exit code evaluation (0 is false, all else is true)
+            fi
           done
+          echo $CHANGE
           if ((CHANGE)) ; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            {
-              echo "### OpenAPI Spec CI"
-              echo ""
-              echo "Hoppet over — ingen endringer i \`$SPECS_FOLDER\` i siste commit."
-            } >> "$GITHUB_STEP_SUMMARY"
+            echo "### OpenAPI Spec CI" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Hoppet over — ingen endringer i \`$SPECS_FOLDER\` i siste commit." >> "$GITHUB_STEP_SUMMARY"
           fi
 
   open-api-spec-ci:
@@ -95,12 +96,14 @@ jobs:
         id: spec_files
         shell: bash
         run: |
-          echo 'files<<QUOTE' >> $GITHUB_OUTPUT # weird heredoc-esque strategy for multiline output vars
+          FILES=
           IFS=',' read -ra folders <<< "$SPECS_FOLDER"
           for folder in ${folders[@]} ; do
-            ls ${folder}/*.json | tr '\n' ' ' >> "$GITHUB_OUTPUT"
+            FILES+="$(ls ${folder}/*.json | tr '\n' ' ') "
           done
-          echo 'QUOTE' >> "$GITHUB_OUTPUT" # "files" ends up containing both spaces and newlines, but this is not a problem
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+        env:
+          SPECS_FOLDER: ${{ inputs.specs_folder }}
 
       - name: Lint specs
         shell: bash
@@ -124,7 +127,7 @@ jobs:
       - name: Get bundled spec files
         id: bundled_files
         shell: bash
-        run: echo "files=$(ls builded-specs/*.json | tr '\n' ' ')" >> $GITHUB_OUTPUT
+        run: echo "files=$(ls builded-specs/*.json | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
 
       - name: Build HTML reports
         shell: bash
