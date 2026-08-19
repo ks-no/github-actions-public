@@ -18,6 +18,11 @@ on:
         type: boolean
         required: false
         default: false
+      trunk:
+        description: 'The default branch ref-name of this repository'
+        type: string
+        required: false
+        default: 'main'
     secrets:
       KS_RUNNER_APP_ID:
         description: 'ID for the GitHub App.'
