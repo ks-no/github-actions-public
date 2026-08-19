@@ -19,14 +19,6 @@ runs:
         fetch-tags: true
         submodules: true
 
-    - name: Checkout ks-no.github.io repository
-      uses: ks-no/github-actions-public/checkout@main
-      with:
-        repository: ks-no/ks-no.github.io
-        token: ${{ inputs.ks_github_app_token }}
-        path: ks-no.github.io
-        ref: source
-
     - name: Find and filter spec files
       id: spec_files
       shell: bash
@@ -41,6 +33,14 @@ runs:
           fi
         done
         echo "files=$FILES" >> "$GITHUB_OUTPUT"
+
+    - name: Checkout ks-no.github.io repository
+      uses: ks-no/github-actions-public/checkout@main
+      with:
+        repository: ks-no/ks-no.github.io
+        token: ${{ inputs.ks_github_app_token }}
+        path: ks-no.github.io
+        ref: source
 
     - name: Lint specs
       shell: bash
