@@ -36,7 +36,7 @@ runs:
         for file in $(ls **/*.json) ; do
           remote_file="ks-no.github.io/static/api/${file##*/}"
           # Add file to FILES if it is not equal to the corresponding file at ks-no.github.io
-          if [ -f "$remote_file" && ! diff -qN "$remote_file" "$file" ] ; then
+          if test -f "$remote_file" && ! diff -qN "$remote_file" "$file" ; then
             FILES+="$file "
           fi
         done
