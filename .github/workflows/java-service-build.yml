@@ -202,7 +202,7 @@ jobs:
           release_body: ${{ steps.prepare_release.outputs.release_body }}
 
       - name: 'Publish OpenAPI specs'
-        if: github.ref_name == inputs.trunk || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
+        # if: github.ref_name == inputs.trunk || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
         uses: ks-no/github-actions-public/update-open-api-specs@fuck-jenkins-fix
         with:
           ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
