@@ -1,15 +1,13 @@
 name: 'OpenAPI Spec CI'
-description: 'Lints, bundles, and deploys OpenAPI specifications.'
+description: >
+  Lints, bundles, and deploys generated, updated OpenAPI specifications.
+  This only works for specs that already exist at the
+  ks-no/ks-no.github.io repo.
+
 inputs:
-  ks_github_app_id:
-    description: 'ID for the GitHub App.'
+  ks_github_app_token:
+    description: 'GitHub App token for logging in to other repos'
     required: true
-  ks_github_app_private_key:
-    description: 'Private key for accessing the GitHub App.'
-    required: true
-  specs_folder:
-    description: 'Folder for OpenAPI specs (default: "specs").'
-    required: false
   
 runs:
   using: "composite"
@@ -21,17 +19,28 @@ runs:
         fetch-tags: true
         submodules: true
 
-    - name: Set up github app for pushing changes
-      id: setup_github_app
-      uses: ks-no/github-actions-public/setup-github-app@main
+    - name: Checkout ks-no.github.io repository
+      uses: ks-no/github-actions-public/checkout@main
       with:
-        ks_github_app_id: ${{ inputs.ks_github_app_id }}
-        ks_github_app_private_key: ${{ inputs.ks_github_app_private_key }}
+        repository: ks-no/ks-no.github.io
+        token: ${{ inputs.ks_github_app_token }}
+        path: ks-no.github.io
+        ref: source
 
-    - name: Get spec files
+    - name: Find and filter spec files
       id: spec_files
       shell: bash
-      run: echo "files=$(ls ${{ inputs.specs_folder || 'specs' }}/*.json | tr '\n' ' ')" >> $GITHUB_OUTPUT
+      run: |
+        FILES=
+        shopt -s globstar
+        for file in $(ls **/*.json) ; do
+          remote_file="ks-no.github.io/static/api/${file##*/}"
+          # Add file to FILES if it is not equal to the corresponding file at ks-no.github.io
+          if [ -f "$remote_file" && ! diff -qN "$remote_file" "$file" ] ; then
+            FILES+="$file "
+          fi
+        done
+        echo "files=$FILES" >> "$GITHUB_OUTPUT"
 
     - name: Lint specs
       shell: bash
@@ -71,17 +80,7 @@ runs:
         name: html-reports
         path: build/
 
-    - name: Checkout ks-no.github.io repository
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-      uses: ks-no/github-actions-public/checkout@main
-      with:
-        repository: ks-no/ks-no.github.io
-        token: ${{ steps.setup_github_app.outputs.app_token }}
-        path: ks-no.github.io
-        ref: source
-
     - name: Copy specs to ks-no.github.io
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
       shell: bash
       run: |
         mkdir -p ks-no.github.io/static/api
@@ -90,7 +89,6 @@ runs:
         done
 
     - name: Commit and push changes
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
       shell: bash
       run: |
         cd ks-no.github.io
@@ -105,15 +103,22 @@ runs:
         fi
 
     - name: Trigger TypeScript model generation
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-      shell: bash
-      run: |
-        for file in ${{ steps.bundled_files.outputs.files }}; do
-          specName=$(basename "$file" .json)
-          echo "Triggering TypeScript model generation for $specName"
-          curl -X POST \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: token ${{ steps.setup_github_app.outputs.app_token }}" \
-            https://api.github.com/repos/ks-no/fiks-typescript-api-models/dispatches \
-            -d '{"event_type": "generate-models", "client_payload": { "projectName": "'"$specName"'" }}'
-        done
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
+      with:
+        github-token: ${{ inputs.ks_github_app_token }}
+        script: |
+          const owner = 'ks-no';
+          const repo = 'fiks-typescript-api-models';
+          const files = '${{ steps.bundled_files.outputs.files }}'.trim().split(/\s+/);
+
+          for (const file of files) {
+            const specName = file.split('/').pop().replace('.json', '');
+            console.log(`Triggering TypeScript model generation for ${specName}`);
+            await github.rest.actions.createWorkflowDispatch({
+              owner,
+              repo,
+              workflow_id: 'build-and-publish.yml',
+              ref: 'master',
+              inputs: { projectName: specName }
+            });
+          }
