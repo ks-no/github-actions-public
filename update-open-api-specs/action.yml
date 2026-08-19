@@ -74,51 +74,51 @@ runs:
           redocly build-docs "$file" -o "build/$filename.html" --disableGoogleFont true
         done
 
-    - name: Upload HTML reports as artifact
-      uses: ks-no/github-actions-public/upload-artifact@main
-      with:
-        name: html-reports
-        path: build/
-
-    - name: Copy specs to ks-no.github.io
-      shell: bash
-      run: |
-        mkdir -p ks-no.github.io/static/api
-        for file in ${{ steps.bundled_files.outputs.files }}; do
-          cp "$file" "ks-no.github.io/static/api/"
-        done
-
-    - name: Commit and push changes
-      shell: bash
-      run: |
-        cd ks-no.github.io
-        git config --global user.name 'github-actions[bot]'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-        git add static/api/*.json
-        if git diff --staged --quiet; then
-          echo "No changes to commit"
-        else
-          git commit -m "Update OpenAPI specs"
-          git push origin HEAD:source
-        fi
-
-    - name: Trigger TypeScript model generation
-      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
-      with:
-        github-token: ${{ inputs.ks_github_app_token }}
-        script: |
-          const owner = 'ks-no';
-          const repo = 'fiks-typescript-api-models';
-          const files = '${{ steps.bundled_files.outputs.files }}'.trim().split(/\s+/);
-
-          for (const file of files) {
-            const specName = file.split('/').pop().replace('.json', '');
-            console.log(`Triggering TypeScript model generation for ${specName}`);
-            await github.rest.actions.createWorkflowDispatch({
-              owner,
-              repo,
-              workflow_id: 'build-and-publish.yml',
-              ref: 'master',
-              inputs: { projectName: specName }
-            });
-          }
+#    - name: Upload HTML reports as artifact
+#      uses: ks-no/github-actions-public/upload-artifact@main
+#      with:
+#        name: html-reports
+#        path: build/
+#
+#    - name: Copy specs to ks-no.github.io
+#      shell: bash
+#      run: |
+#        mkdir -p ks-no.github.io/static/api
+#        for file in ${{ steps.bundled_files.outputs.files }}; do
+#          cp "$file" "ks-no.github.io/static/api/"
+#        done
+#
+#    - name: Commit and push changes
+#      shell: bash
+#      run: |
+#        cd ks-no.github.io
+#        git config --global user.name 'github-actions[bot]'
+#        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+#        git add static/api/*.json
+#        if git diff --staged --quiet; then
+#          echo "No changes to commit"
+#        else
+#          git commit -m "Update OpenAPI specs"
+#          git push origin HEAD:source
+#        fi
+#
+#    - name: Trigger TypeScript model generation
+#      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
+#      with:
+#        github-token: ${{ inputs.ks_github_app_token }}
+#        script: |
+#          const owner = 'ks-no';
+#          const repo = 'fiks-typescript-api-models';
+#          const files = '${{ steps.bundled_files.outputs.files }}'.trim().split(/\s+/);
+#
+#          for (const file of files) {
+#            const specName = file.split('/').pop().replace('.json', '');
+#            console.log(`Triggering TypeScript model generation for ${specName}`);
+#            await github.rest.actions.createWorkflowDispatch({
+#              owner,
+#              repo,
+#              workflow_id: 'build-and-publish.yml',
+#              ref: 'master',
+#              inputs: { projectName: specName }
+#            });
+#          }
