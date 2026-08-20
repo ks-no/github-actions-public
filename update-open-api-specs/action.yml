@@ -1,8 +1,5 @@
 name: 'OpenAPI Spec CI'
-description: >
-  Lints, bundles, and deploys generated, updated OpenAPI specifications.
-  This only works for specs that already exist at the
-  ks-no/ks-no.github.io repo.
+description: 'Lints, bundles, and deploys generated, updated OpenAPI specifications.'
 
 inputs:
   ks_github_app_token:
@@ -13,24 +10,6 @@ runs:
   using: "composite"
   steps:
 
-    - name: Find and filter spec files
-      id: spec_files
-      shell: bash
-      run: |
-        FILES=
-        shopt -s globstar
-        cat **/fiks-protokoll-katalog-api-v1.json
-        for file in $(ls **/*.json) ; do
-          remote_file="ks-no.github.io/static/api/${file##*/}"
-          echo "remote file: $remote_file"
-          # Add file to FILES if it is not equal to the corresponding file at ks-no.github.io
-          if test -f "$remote_file" && ! diff -q "$remote_file" "$file" ; then
-            FILES+="$file "
-          fi
-        done
-        echo "files: $FILES"
-        echo "files=$FILES" >> "$GITHUB_OUTPUT"
-
     - name: Checkout ks-no.github.io repository
       uses: ks-no/github-actions-public/checkout@main
       with:
@@ -38,6 +17,21 @@ runs:
         token: ${{ inputs.ks_github_app_token }}
         path: ks-no.github.io
         ref: source
+
+    - name: Filter spec files
+      id: spec_files
+      shell: bash
+      run: |
+        FILES=
+        for file in $(ls */target/*.json) ; do
+          remote_file="ks-no.github.io/static/api/${file##*/}"
+          # Add file to FILES if it is not equal to the corresponding file at ks-no.github.io
+          if test -f "$remote_file" && ! diff -q "$remote_file" "$file" ; then
+            FILES+="$file "
+          fi
+        done
+        echo "files: $FILES"
+        echo "files=$FILES" >> "$GITHUB_OUTPUT"
 
     - name: Lint specs
       shell: bash
