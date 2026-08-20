@@ -35,10 +35,7 @@ runs:
 
     - name: Lint specs
       shell: bash
-      run: |
-        for file in ${{ steps.spec_files.outputs.files }}; do
-          redocly lint "$file"
-        done
+      run: redocly lint ${{ steps.spec_files.outputs.files }}
 
     - name: Create build directories
       shell: bash
