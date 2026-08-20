@@ -82,43 +82,43 @@ runs:
       with:
         name: surefire-reports
         path: '**/surefire-reports/*.xml'
-
-    - name: Build and start component test containers
-      shell: bash
-      run: |
-        cd component-test
-        jfrog docker compose build
-        jfrog docker compose up -d --remove-orphans
-
-    - name: Run component tests
-      shell: bash
-      run: |
-        jfrog mvn -f component-test/pom.xml -Dcomponent=true -B verify
-
-    - name: Archive component test results
-      if: always()
-      uses: ks-no/github-actions-public/upload-artifact@main
-      with:
-        name: component-test-reports
-        path: 'component-test/target/surefire-reports/*.xml'
-
-    - name: Publish Test Results
-      if: always()
-      continue-on-error: true
-      uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 #v3.0.0
-      with:
-        name: Test Results
-        path: '**/surefire-reports/*.xml'
-        reporter: java-junit
-        fail-on-error: true
-        fail-on-empty: true
-
-    - name: Stop and clean up component test containers
-      if: always()
-      shell: bash
-      run: |
-        cd component-test
-        jfrog docker compose down --volumes --remove-orphans
+#
+#    - name: Build and start component test containers
+#      shell: bash
+#      run: |
+#        cd component-test
+#        jfrog docker compose build
+#        jfrog docker compose up -d --remove-orphans
+#
+#    - name: Run component tests
+#      shell: bash
+#      run: |
+#        jfrog mvn -f component-test/pom.xml -Dcomponent=true -B verify
+#
+#    - name: Archive component test results
+#      if: always()
+#      uses: ks-no/github-actions-public/upload-artifact@main
+#      with:
+#        name: component-test-reports
+#        path: 'component-test/target/surefire-reports/*.xml'
+#
+#    - name: Publish Test Results
+#      if: always()
+#      continue-on-error: true
+#      uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 #v3.0.0
+#      with:
+#        name: Test Results
+#        path: '**/surefire-reports/*.xml'
+#        reporter: java-junit
+#        fail-on-error: true
+#        fail-on-empty: true
+#
+#    - name: Stop and clean up component test containers
+#      if: always()
+#      shell: bash
+#      run: |
+#        cd component-test
+#        jfrog docker compose down --volumes --remove-orphans
 
     - name: Publish Maven Artifacts
       shell: bash

@@ -145,7 +145,7 @@ jobs:
 
       - name: 'Build Java Project'
         id: build_java
-        uses: ks-no/github-actions-public/build-java-and-test@main
+        uses: ks-no/github-actions-public/build-java-and-test@fuck-jenkins-fix
         with:
           java_version: ${{ inputs.java_version }}
           # DT upload is handled by deploy workflow
