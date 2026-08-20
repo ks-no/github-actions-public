@@ -13,18 +13,14 @@ runs:
   using: "composite"
   steps:
 
-    - name: Debug print
-      shell: bash
-      run: ls */target
-
     - name: Find and filter spec files
       id: spec_files
       shell: bash
       run: |
         FILES=
         shopt -s globstar
+        cat **/fiks-protokoll-katalog-api-v1.json
         for file in $(ls **/*.json) ; do
-          echo "file: $file"
           remote_file="ks-no.github.io/static/api/${file##*/}"
           echo "remote file: $remote_file"
           # Add file to FILES if it is not equal to the corresponding file at ks-no.github.io
