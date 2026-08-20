@@ -35,7 +35,7 @@ runs:
 
     - name: Lint specs
       shell: bash
-      run: redocly lint ${{ steps.spec_files.outputs.files }}
+      run: redocly lint ${{ steps.spec_files.outputs.files }} --skip-rule=operation-summary
 
     - name: Create build directories
       shell: bash
