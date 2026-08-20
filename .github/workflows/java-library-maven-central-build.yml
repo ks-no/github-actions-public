@@ -53,10 +53,6 @@ on:
         required: true
       DEPENDENCY_TRACK_API_KEY:
         required: true
-      KS_CODESIGN_COMBO:
-        required: true
-      KS_CODESIGN_COMBO_PASSWD:
-        required: true
       SONATYPE_OSSRH_SETTINGS_XML:
         required: true
 permissions:
