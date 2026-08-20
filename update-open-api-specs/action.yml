@@ -24,11 +24,11 @@ runs:
       run: |
         FILES=
         for file in $(ls */target/*.json) ; do
-          #remote_file="ks-no.github.io/static/api/${file##*/}"
+          remote_file="ks-no.github.io/static/api/${file##*/}"
           # Add file to FILES if it is not equal to the corresponding file at ks-no.github.io
-          #if test -f "$remote_file" && ! diff -q "$remote_file" "$file" ; then
+          if test -f "$remote_file" && ! diff -q "$remote_file" "$file" ; then
             FILES+="$file "
-          #fi
+          fi
         done
         echo "files: $FILES"
         echo "files=$FILES" >> "$GITHUB_OUTPUT"
