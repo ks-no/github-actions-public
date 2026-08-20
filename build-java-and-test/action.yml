@@ -82,7 +82,11 @@ runs:
       with:
         name: surefire-reports
         path: '**/surefire-reports/*.xml'
-#
+
+    - name: Debug print
+      shell: bash
+      run: ls */target
+
 #    - name: Build and start component test containers
 #      shell: bash
 #      run: |
@@ -135,3 +139,7 @@ runs:
       shell: bash
       run: |
         jfrog rt build-promote $BUILD_NAME $GITHUB_RUN_NUMBER ks-maven
+
+    - name: Debug print
+      shell: bash
+      run: ls */target

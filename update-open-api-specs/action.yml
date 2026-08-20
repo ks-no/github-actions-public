@@ -19,6 +19,10 @@ runs:
         fetch-tags: true
         submodules: true
 
+    - name: Debug print
+      shell: bash
+      run: ls */target
+
     - name: Find and filter spec files
       id: spec_files
       shell: bash
