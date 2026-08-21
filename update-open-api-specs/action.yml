@@ -6,10 +6,9 @@ description: >
   `ks-no/ks-no.github.no` repo.
 
 inputs:
-  specs_folder:
-    description: 'Folder for OpenAPI specs.'
-    required: false
-    default: ''
+  specs:
+    description: 'Comma-separated list of spec files w/ paths'
+    required: true
   ks_github_app_token:
     description: 'GitHub App token for logging in to other repos'
     required: true
@@ -26,29 +25,14 @@ runs:
         path: ks-no.github.io
         ref: source
 
-    - name: Get specs from folder
-      if: inputs.specs_folder != ''
+    - name: Filter specs by change
       shell: bash
       run: |
         FILES=
-        for file in $(ls "${{ inputs.specs_folder }}"/*.json) ; do
+        for file in $(tr ',' ' ' <<< "${{ inputs.specs }}") ; do
           remote_file="ks-no.github.io/static/api/${file##*/}"
           # Add file to FILES if it is not equal to the corresponding file at ks-no.github.io
           diff -qN "$remote_file" "$file" ; then
-            FILES+="$file "
-          fi
-        done
-        echo "FILES=$FILES" >> "$GITHUB_ENV"
-
-    - name: If no folder, get generated spec files
-      if: inputs.specs_folder == ''
-      shell: bash
-      run: |
-        FILES=
-        for file in $(ls */target/*.json) ; do
-          remote_file="ks-no.github.io/static/api/${file##*/}"
-          # Add file to FILES if it is not equal to the corresponding file at ks-no.github.io
-          if test -f "$remote_file" && ! diff -q "$remote_file" "$file" ; then
             FILES+="$file "
           fi
         done
