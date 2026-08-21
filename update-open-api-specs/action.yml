@@ -1,9 +1,8 @@
 name: 'OpenAPI Spec CI'
 description: >
   Lints, bundles, and deploys updated OpenAPI specifications.
-  If `specs_folder` is not given, it works on spec files which are generated during a build and lie in a
-  `<subproject>/target/` directory. In this case, the spec file must already exist in the
-  `ks-no/ks-no.github.no` repo.
+  Each spec file given is only processed if it differs from the corresponding file
+  residing in the `ks-no/ks-no.github.io` repo.
 
 inputs:
   specs:
