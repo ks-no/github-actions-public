@@ -62,7 +62,7 @@ on:
         required: false
         type: boolean
         default: false
-      trunk:
+      default_branch:
         description: "The ref name of the repo's default branch"
         type: string
         required: false
@@ -202,7 +202,7 @@ jobs:
           release_body: ${{ steps.prepare_release.outputs.release_body }}
 
       - name: 'Publish OpenAPI specs'
-        if: github.ref_name == inputs.trunk || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
+        if: github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
         uses: ks-no/github-actions-public/update-open-api-specs@main
         with:
           ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
@@ -215,7 +215,7 @@ jobs:
           helm_chart_prov_url: ${{ steps.publish_helm.outputs.helm_chart_prov_url }}
 
       - name: 'SBOM Upload and Report'
-        if: github.ref_name == inputs.trunk || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
+        if: github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
         uses: ks-no/github-actions-public/sbom-upload-and-report@main
         with:
           dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}

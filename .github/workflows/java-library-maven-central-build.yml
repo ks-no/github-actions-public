@@ -32,7 +32,7 @@ on:
         description: 'Maven settings.xml for deploying to Maven Central.'
         required: false
         type: string
-      trunk:
+      default_branch:
         description: "The ref name of the repo's default branch"
         type: string
         required: false
@@ -180,7 +180,7 @@ jobs:
           jfrog mvn -U -B -P snapshot validate
 
       - name: Release - Set new version and tag
-        if: inputs.is_release == true && (github.ref_name == inputs.trunk || startsWith(github.ref, 'refs/heads/master')) # TODO: Legg til input for repos som brukar "master"
+        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || startsWith(github.ref, 'refs/heads/master')) # TODO: Legg til input for repos som brukar "master"
         shell: bash
         run: |
           jfrog mvn versions:set -DnewVersion=${{ steps.resolve_version.outputs.resolved_version }} -DgenerateBackupPoms=false
@@ -188,7 +188,7 @@ jobs:
           git tag -a ${{ steps.resolve_version.outputs.resolved_version }} -m "Release ${{ steps.resolve_version.outputs.resolved_version }}"
 
       - name: Release - Verify POM
-        if: inputs.is_release == true && (github.ref_name == inputs.trunk  || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
+        if: inputs.is_release == true && (github.ref_name == inputs.default_branch  || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
         shell: bash
         run: |
           jfrog mvn -U -B validate
@@ -300,7 +300,7 @@ jobs:
               core.setFailed(`Component tests did not pass (conclusion: ${conclusion})`);
             }
       - name: Promote Release Build
-        if: inputs.is_release == true && (github.ref_name == inputs.trunk  || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
+        if: inputs.is_release == true && (github.ref_name == inputs.default_branch  || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
         shell: bash
         env:
           JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
@@ -320,7 +320,7 @@ jobs:
           jfrog rt build-promote "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER" ks-maven-snapshot
 
       - name: Deploy to Maven Central
-        if: github.ref_name == inputs.trunk || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
+        if: github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
         shell: bash
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.gpg_passphrase }}
@@ -337,7 +337,7 @@ jobs:
           jfrog mvn -B -e $PROFILE -DskipTests -Dmaven.test.skip=true deploy
 
       - name: Release - Set next snapshot version
-        if: inputs.is_release == true && (github.ref_name == inputs.trunk || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
+        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
         shell: bash
         run: |
           IFS='.' read -r major minor patch <<< "${{ inputs.version }}"
@@ -348,7 +348,7 @@ jobs:
           git commit -am "Bump to next snapshot version"
 
       - name: Generate Release Notes
-        if: inputs.is_release == true && (github.ref_name == inputs.trunk || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
+        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
         uses: ks-no/github-actions-public/generate-release-notes@main
         id: generate_body
         with:
@@ -357,7 +357,7 @@ jobs:
           reviewer: ${{ inputs.reviewer }}
 
       - name: Create GitHub Release
-        if: inputs.is_release == true && (github.ref_name == inputs.trunk || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
+        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 #v3.0.2
         env:
           GITHUB_TOKEN: ${{ steps.app_token.outputs.app_token }}
@@ -369,13 +369,13 @@ jobs:
           prerelease: false
 
       - name: Push changes
-        if: inputs.is_release == true && (github.ref_name == inputs.trunk || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
+        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
         shell: bash
         run: |
           git push --follow-tags
 
       - name: 'SBOM Upload and Report'
-        if: github.ref_name == inputs.trunk || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
+        if: github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
         uses: ks-no/github-actions-public/sbom-upload-and-report@main
         with:
           dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
