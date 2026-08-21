@@ -1,0 +1,116 @@
+name: 'OpenAPI Spec CI'
+description: >
+  Lints, bundles, and deploys updated OpenAPI specifications.
+  Each spec file given is only processed if it differs from the corresponding file
+  residing in the `ks-no/ks-no.github.io` repo.
+
+inputs:
+  specs:
+    description: 'Comma-separated list of spec files w/ paths'
+    required: true
+  ks_github_app_token:
+    description: 'GitHub App token for logging in to other repos'
+    required: true
+  
+runs:
+  using: "composite"
+  steps:
+
+    - name: Checkout ks-no.github.io repository
+      uses: ks-no/github-actions-public/checkout@main
+      with:
+        repository: ks-no/ks-no.github.io
+        token: ${{ inputs.ks_github_app_token }}
+        path: ks-no.github.io
+        ref: source
+
+    - name: Filter specs by change
+      shell: bash
+      run: |
+        FILES=
+        for file in $(tr ',' ' ' <<< "${{ inputs.specs }}") ; do
+          remote_file="ks-no.github.io/static/api/${file##*/}"
+          # Add file to FILES if it is not equal to the corresponding file at ks-no.github.io
+          diff -qN "$remote_file" "$file" ; then
+            FILES+="$file "
+          fi
+        done
+        echo "FILES=$FILES" >> "$GITHUB_ENV"
+
+    - name: Lint specs
+      shell: bash
+      run: redocly lint $FILES --skip-rule=operation-summary
+
+    - name: Create build directories
+      shell: bash
+      run: mkdir -p builded-specs build
+
+    - name: Bundle specs
+      shell: bash
+      run: |
+        for file in $FILES ; do
+          filename=$(basename "$file")
+          redocly bundle "$file" --ext json -o "builded-specs/$filename"
+        done
+
+    - name: Get bundled spec files
+      id: bundled_files
+      shell: bash
+      run: echo "files=$(ls builded-specs/*.json | tr '\n' ' ')" >> $GITHUB_OUTPUT
+
+    - name: Build HTML reports
+      shell: bash
+      run: |
+        for file in ${{ steps.bundled_files.outputs.files }}; do
+          filename=$(basename "$file" .json)
+          redocly build-docs "$file" -o "build/$filename.html" --disableGoogleFont true
+        done
+
+    - name: Upload HTML reports as artifact
+      uses: ks-no/github-actions-public/upload-artifact@main
+      with:
+        name: html-reports
+        path: build/
+
+    - name: Copy specs to ks-no.github.io
+      shell: bash
+      run: |
+        mkdir -p ks-no.github.io/static/api
+        for file in ${{ steps.bundled_files.outputs.files }}; do
+          cp "$file" "ks-no.github.io/static/api/"
+        done
+
+    - name: Commit and push changes
+      shell: bash
+      run: |
+        cd ks-no.github.io
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+        git add static/api/*.json
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Update OpenAPI specs"
+          git push origin HEAD:source
+        fi
+
+    - name: Trigger TypeScript model generation
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
+      with:
+        github-token: ${{ inputs.ks_github_app_token }}
+        script: |
+          const owner = 'ks-no';
+          const repo = 'fiks-typescript-api-models';
+          const files = '${{ steps.bundled_files.outputs.files }}'.trim().split(/\s+/);
+
+          for (const file of files) {
+            const specName = file.split('/').pop().replace('.json', '');
+            console.log(`Triggering TypeScript model generation for ${specName}`);
+            await github.rest.actions.createWorkflowDispatch({
+              owner,
+              repo,
+              workflow_id: 'build-and-publish.yml',
+              ref: 'master',
+              inputs: { projectName: specName }
+            });
+          }

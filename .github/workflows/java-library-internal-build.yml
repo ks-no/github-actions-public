@@ -32,6 +32,11 @@ on:
         required: false
         type: string
         default: ''
+      default_branch:
+        description: "The ref name of the repo's default branch"
+        type: string
+        required: false
+        default: 'main'
     secrets:
       ARTIFACTORY_USERNAME:
         required: true
@@ -114,7 +119,7 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: Generate release body and set action output
-        if: inputs.is_release == true && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
         id: generate_body
         uses: ks-no/github-actions-public/generate-release-notes@main
         with:
@@ -128,7 +133,7 @@ jobs:
           jfrog mvn -T0.5C enforcer:enforce@validate-snap
 
       - name: Release - Set new version
-        if: inputs.is_release == true && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
         run: |
           jfrog mvn versions:set -DnewVersion=${{ steps.resolve_version.outputs.resolved_version }} -DgenerateBackupPoms=false
           git commit -am "Release ${{ steps.resolve_version.outputs.resolved_version }}"
@@ -219,7 +224,7 @@ jobs:
             }
 
       - name: Release - Set next snapshot version
-        if: inputs.is_release == true && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
         run: |
           IFS='.' read -r major minor patch <<< "${{ steps.resolve_version.outputs.resolved_version }}"
           next_patch=$((patch + 1))
@@ -236,7 +241,7 @@ jobs:
           jfrog rt build-publish
 
       - name: Promote Release Build
-        if: inputs.is_release == true && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
         env:
           JFROG_CLI_BUILD_NAME: ${{ github.repository }}
           JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
@@ -246,7 +251,7 @@ jobs:
 
 
       - name: Create GitHub Release
-        if: inputs.is_release == true && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 #v3.0.2
         env:
           GITHUB_TOKEN: ${{ steps.app_token.outputs.app_token }}
@@ -271,7 +276,7 @@ jobs:
           git push --follow-tags
 
       - name: 'SBOM Upload and Report'
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        if: github.ref_name == inputs.default_branch  || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
         uses: ks-no/github-actions-public/sbom-upload-and-report@main
         with:
           dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}

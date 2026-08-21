@@ -13,6 +13,16 @@ on:
         required: false
         type: string
         default: ''
+      is_public:
+        description: 'Is this repository public?'
+        type: boolean
+        required: false
+        default: false
+      default_branch:
+        description: 'The default branch ref-name of this repository'
+        type: string
+        required: false
+        default: 'main'
     secrets:
       KS_RUNNER_APP_ID:
         description: 'ID for the GitHub App.'
@@ -27,7 +37,7 @@ concurrency:
 
 jobs:
   check-spec-changes:
-    runs-on: [self-hosted, x64]
+    runs-on: ${{ inputs.is_public && 'ubuntu-latest' || fromJSON('["self-hosted", "x64"]') }}
     timeout-minutes: 2
     outputs:
       changed: ${{ steps.check.outputs.changed }}
@@ -124,7 +134,7 @@ jobs:
           path: build/
 
       - name: Checkout ks-no.github.io repository
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        if: github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
         uses: ks-no/github-actions-public/checkout@main
         with:
           repository: ks-no/ks-no.github.io
@@ -133,7 +143,7 @@ jobs:
           ref: source
 
       - name: Copy specs to ks-no.github.io
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        if: github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
         shell: bash
         run: |
           mkdir -p ks-no.github.io/static/api
@@ -147,7 +157,7 @@ jobs:
           done
 
       - name: Commit and push changes
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        if: github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
         shell: bash
         run: |
           cd ks-no.github.io
@@ -162,7 +172,7 @@ jobs:
           fi
 
       - name: Trigger TypeScript model generation
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        if: github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
         with:
           github-token: ${{ steps.setup_github_app.outputs.app_token }}
