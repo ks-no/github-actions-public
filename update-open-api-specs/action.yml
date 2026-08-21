@@ -1,5 +1,9 @@
 name: 'OpenAPI Spec CI'
-description: 'Lints, bundles, and deploys generated, updated OpenAPI specifications.'
+description: >
+  Lints, bundles, and deploys generated, updated OpenAPI specifications.
+  This only works on spec files which are generated during a build and lie in a
+  <subproject>/target/ directory.
+  In addition, the spec file must already exist in the ks-no/ks-no.github.no repo.
 
 inputs:
   ks_github_app_token:
