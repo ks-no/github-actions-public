@@ -1,11 +1,15 @@
 name: 'OpenAPI Spec CI'
 description: >
-  Lints, bundles, and deploys generated, updated OpenAPI specifications.
-  This only works on spec files which are generated during a build and lie in a
-  <subproject>/target/ directory.
-  In addition, the spec file must already exist in the ks-no/ks-no.github.no repo.
+  Lints, bundles, and deploys updated OpenAPI specifications.
+  If `specs_folder` is not given, it works on spec files which are generated during a build and lie in a
+  `<subproject>/target/` directory. In this case, the spec file must already exist in the
+  `ks-no/ks-no.github.no` repo.
 
 inputs:
+  specs_folder:
+    description: 'Folder for OpenAPI specs.'
+    required: false
+    default: ''
   ks_github_app_token:
     description: 'GitHub App token for logging in to other repos'
     required: true
@@ -22,8 +26,22 @@ runs:
         path: ks-no.github.io
         ref: source
 
-    - name: Filter spec files
-      id: spec_files
+    - name: Get specs from folder
+      if: inputs.specs_folder != ''
+      shell: bash
+      run: |
+        FILES=
+        for file in $(ls "${{ inputs.specs_folder }}"/*.json) ; do
+          remote_file="ks-no.github.io/static/api/${file##*/}"
+          # Add file to FILES if it is not equal to the corresponding file at ks-no.github.io
+          diff -qN "$remote_file" "$file" ; then
+            FILES+="$file "
+          fi
+        done
+        echo "FILES=$FILES" >> "$GITHUB_ENV"
+
+    - name: If no folder, get generated spec files
+      if: inputs.specs_folder == ''
       shell: bash
       run: |
         FILES=
@@ -34,12 +52,11 @@ runs:
             FILES+="$file "
           fi
         done
-        echo "files: $FILES"
-        echo "files=$FILES" >> "$GITHUB_OUTPUT"
+        echo "FILES=$FILES" >> "$GITHUB_ENV"
 
     - name: Lint specs
       shell: bash
-      run: redocly lint ${{ steps.spec_files.outputs.files }} --skip-rule=operation-summary
+      run: redocly lint $FILES --skip-rule=operation-summary
 
     - name: Create build directories
       shell: bash
@@ -48,7 +65,7 @@ runs:
     - name: Bundle specs
       shell: bash
       run: |
-        for file in ${{ steps.spec_files.outputs.files }}; do
+        for file in $FILES ; do
           filename=$(basename "$file")
           redocly bundle "$file" --ext json -o "builded-specs/$filename"
         done
