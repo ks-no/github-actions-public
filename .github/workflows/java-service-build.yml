@@ -82,7 +82,7 @@ permissions:
 
 jobs:
   build-and-deploy:
-    runs-on: ${{ inputs.big_runner && 'x64-large' || fromJSON('["self-hosted", "x64"]') }}
+    runs-on: ${{ inputs.big_runner && 'x64-large' || fromJSON('["self-hosted", "test"]') }}
     timeout-minutes: 40
     concurrency:
       group: ${{ inputs.is_release == true && format('release-{0}', github.repository) || format('autobuild-{0}-{1}', github.repository, github.ref_name) }}
