@@ -68,7 +68,10 @@ on:
         required: false
         default: 'main'
       specs:
-        description: 'Comma-separated list of generated spec files (w/ paths) to inspect and publish.'
+        description: >
+          Comma-separated list of "service:specFile" pairs to inspect and publish,
+          e.g. "fullmakt-service:fullmakt-api-v1". Path is resolved as
+          "${service}/target/api-spec/${specFile}.json".
         type: string
         required: false
         default: ''

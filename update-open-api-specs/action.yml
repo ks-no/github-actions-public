@@ -6,7 +6,9 @@ description: >
 
 inputs:
   specs:
-    description: 'Comma-separated list of spec files w/ paths'
+    description: >
+      Comma-separated list of "service:specFile" pairs, e.g. "fullmakt-service:fullmakt-api-v1".
+      Each spec's path is resolved as "${service}/target/api-spec/${specFile}.json".
     required: true
   ks_github_app_token:
     description: 'GitHub App token for logging in to other repos'
@@ -28,10 +30,13 @@ runs:
       shell: bash
       run: |
         FILES=
-        for file in $(tr ',' ' ' <<< "${{ inputs.specs }}") ; do
+        for pair in $(tr ',' ' ' <<< "${{ inputs.specs }}") ; do
+          service="${pair%%:*}"
+          specFile="${pair#*:}"
+          file="${service}/target/api-spec/${specFile}.json"
           remote_file="ks-no.github.io/static/api/${file##*/}"
           # Add file to FILES if it is not equal to the corresponding file at ks-no.github.io
-          diff -qN "$remote_file" "$file" ; then
+          if ! diff -qN "$remote_file" "$file" ; then
             FILES+="$file "
           fi
         done
