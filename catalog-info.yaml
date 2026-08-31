@@ -1,0 +1,17 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: github-actions-public
+  title: GitHub Actions Public
+  description: >
+    Github Actions – workflows og actions for KS Digital
+  annotations:
+    github.com/project-slug: ks-no/github-actions-public
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - github-actions
+    - ci/cd
+spec:
+  type: tool
+  owner: group:team-utviklerplattform
+  lifecycle: production
