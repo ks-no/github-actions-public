@@ -15,24 +15,24 @@ If your repo demands that all Actions workflow calls are pinned to a commit SHA,
 
 ### For JVM-based projects:
 
-- java-service-build *(for deployable services)*
-- java-library-internal-build *(for private libraries)*
-- java-library-maven-central-build *(for public libraries)*
+- `java-service-build` *(for deployable services)*
+- `java-library-internal-build` *(for private libraries)*
+- `java-library-maven-central-build` *(for public libraries)*
 
 ### For .NET-based libraries:
 
-- dotnet-library-build
+- `dotnet-library-build`
 
 ### For Node.js-based services:
 
-- nodejs-service-build
+- `nodejs-service-build`
 
 ### Various
 
-- deploy *(to deploy a service with Helm; the Helm-chart values must already have been populated)*
-- open-api-specs *(to publish OpenAPI spec files for spec-first projects)*
-- license-check *(to check project licenses against Dependency-Track)*
-- zizmor-audit *(to lint workflow files)*
+- `deploy` *(to deploy a service with Helm; the Helm-chart values must already have been populated)*
+- `open-api-specs` *(to publish OpenAPI spec files for spec-first projects)*
+- `license-check` *(to check project licenses against Dependency-Track)*
+- `zizmor-audit` *(to lint workflow files)*
 
 ## Composites
 
@@ -48,10 +48,10 @@ The same caveat about commit SHA's as above applies here.
 Some composites are simply wrappers around widely used third party actions, to avoid the hassle of updating commit SHA's.
 These wrappers are:
 
-- checkout (for `actions/checkout`)
-- upload-artifact (for `actions/upload-artifact`)
-- download-artifact (for `actions/download-artifact`)
-- setup-java (for `actions/setup-java`)
+- `checkout` (for `actions/checkout`)
+- `upload-artifact` (for `actions/upload-artifact`)
+- `download-artifact` (for `actions/download-artifact`)
+- `setup-java` (for `actions/setup-java`)
 
 More may be added in the future.
 
