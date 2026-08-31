@@ -56,7 +56,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: [self-hosted, x64]
+    runs-on: [self-hosted, test]
     timeout-minutes: 30
     concurrency:
       group: ${{ inputs.is_release == true && format('release-{0}', github.repository) || format('autobuild-{0}-{1}', github.repository, github.ref_name) }}

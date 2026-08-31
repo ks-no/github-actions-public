@@ -52,7 +52,7 @@ on:
 
 jobs:
   license-scan:
-    runs-on: [self-hosted, x64]
+    runs-on: [self-hosted, test]
     steps:
       - name: Resolve effective project name
         id: effective_name

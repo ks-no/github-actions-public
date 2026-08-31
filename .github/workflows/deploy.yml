@@ -37,7 +37,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: [self-hosted, x64]
+    runs-on: [self-hosted, test]
     timeout-minutes: 5
     steps:
       - name: Valider inputs
