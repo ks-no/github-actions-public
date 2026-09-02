@@ -62,6 +62,8 @@ on:
         required: true
       GPG_OSS_KEYS:
         required: true
+      GPG_OSS_PASSPHRASE:
+        required: true
 permissions:
   id-token: write
   contents: write
@@ -322,6 +324,7 @@ jobs:
         shell: bash
         env:
           MAVEN_GPG_KEY: ${{ secrets.GPG_OSS_KEYS }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_OSS_PASSPHRASE }}
           GNUPGHOME: ${{ runner.temp }}/.gnupg
         run: |
           if [[ -n "$MAVEN_GPG_KEY" ]]; then
