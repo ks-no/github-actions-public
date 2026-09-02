@@ -43,14 +43,17 @@ runs:
         echo "FILES=$FILES" >> "$GITHUB_ENV"
 
     - name: Lint specs
+      if: env.FILES != ''
       shell: bash
       run: redocly lint $FILES --skip-rule=operation-summary
 
     - name: Create build directories
+      if: env.FILES != ''
       shell: bash
       run: mkdir -p builded-specs build
 
     - name: Bundle specs
+      if: env.FILES != ''
       shell: bash
       run: |
         for file in $FILES ; do
@@ -59,11 +62,13 @@ runs:
         done
 
     - name: Get bundled spec files
+      if: env.FILES != ''
       id: bundled_files
       shell: bash
       run: echo "files=$(ls builded-specs/*.json | tr '\n' ' ')" >> $GITHUB_OUTPUT
 
     - name: Build HTML reports
+      if: env.FILES != ''
       shell: bash
       run: |
         for file in ${{ steps.bundled_files.outputs.files }}; do
@@ -72,12 +77,14 @@ runs:
         done
 
     - name: Upload HTML reports as artifact
+      if: env.FILES != ''
       uses: ks-no/github-actions-public/upload-artifact@main
       with:
         name: html-reports
         path: build/
 
     - name: Copy specs to ks-no.github.io
+      if: env.FILES != ''
       shell: bash
       run: |
         mkdir -p ks-no.github.io/static/api
@@ -86,6 +93,7 @@ runs:
         done
 
     - name: Commit and push changes
+      if: env.FILES != ''
       shell: bash
       run: |
         cd ks-no.github.io
@@ -100,6 +108,7 @@ runs:
         fi
 
     - name: Trigger TypeScript model generation
+      if: env.FILES != ''
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
       with:
         github-token: ${{ inputs.ks_github_app_token }}
