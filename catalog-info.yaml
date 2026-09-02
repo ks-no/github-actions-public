@@ -10,7 +10,7 @@ metadata:
     backstage.io/techdocs-ref: dir:.
   tags:
     - github-actions
-    - ci/cd
+    - ci-cd
 spec:
   type: tool
   owner: group:team-utviklerplattform
