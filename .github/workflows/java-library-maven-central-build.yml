@@ -60,6 +60,8 @@ on:
         required: true
       SONATYPE_OSSRH_SETTINGS_XML:
         required: true
+      GPG_OSS_KEYS:
+        required: true
 permissions:
   id-token: write
   contents: write
@@ -319,12 +321,12 @@ jobs:
         if: github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
         shell: bash
         env:
-          MAVEN_GPG_PASSPHRASE: ${{ secrets.gpg_passphrase }}
+          MAVEN_GPG_KEY: ${{ secrets.GPG_OSS_KEYS }}
           GNUPGHOME: ${{ runner.temp }}/.gnupg
         run: |
-          if [[ -n "${{ secrets.gpg_private_key }}" ]]; then
+          if [[ -n "$MAVEN_GPG_KEY" ]]; then
             mkdir -p $GNUPGHOME
-            echo "${{ secrets.gpg_private_key }}" | gpg --batch --import
+            echo "MAVEN_GPG_KEY" | gpg --batch --import
           fi
           PROFILE=""
           if [[ "${{ inputs.is_release }}" == "true" ]]; then
