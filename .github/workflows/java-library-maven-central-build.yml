@@ -335,7 +335,7 @@ jobs:
           if [[ "${{ inputs.is_release }}" == "true" ]]; then
             PROFILE="-P release"
           fi
-          jfrog mvn -B -e $PROFILE -DskipTests -Dmaven.test.skip=true deploy
+          mvn -B -e $PROFILE -DskipTests -Dmaven.test.skip=true deploy
 
       - name: Release - Set next snapshot version
         if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
