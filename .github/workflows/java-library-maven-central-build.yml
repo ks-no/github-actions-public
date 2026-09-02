@@ -326,7 +326,7 @@ jobs:
         run: |
           if [[ -n "$MAVEN_GPG_KEY" ]]; then
             mkdir -p $GNUPGHOME
-            echo "$MAVEN_GPG_KEY" | gpg --batch --with-colons --import -
+            gpg --batch --with-colons --import $MAVEN_GPG_KEY
           fi
           PROFILE=""
           if [[ "${{ inputs.is_release }}" == "true" ]]; then
