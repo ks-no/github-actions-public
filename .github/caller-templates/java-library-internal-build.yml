@@ -1,0 +1,47 @@
+# Backstage starter workflow for an internal Java library.
+# Required secrets: ARTIFACTORY_USERNAME, ARTIFACTORY_PASSWORD, KS_RUNNER_APP_ID, KS_RUNNER_PRIVATE_KEY, DEPENDENCY_TRACK_API_KEY.
+name: Build Java library
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      is_release:
+        description: 'Release build?'
+        type: boolean
+        required: false
+        default: false
+      version:
+        description: 'Exact release version. Leave empty when using semver_increment.'
+        required: false
+      semver_increment:
+        description: 'Select semver increment. Leave empty when version is set.'
+        type: choice
+        required: false
+        options:
+          - ''
+          - next major
+          - next minor
+          - next patch
+      reviewer:
+        description: 'Optional reviewer for the release.'
+        required: false
+        default: ''
+
+permissions:
+  id-token: write
+  contents: write
+  checks: write
+
+jobs:
+  build:
+    uses: ks-no/github-actions-public/.github/workflows/java-library-internal-build.yml@main
+    secrets: inherit
+    with:
+      java_version: 'java21'
+      is_release: ${{ github.event_name == 'workflow_dispatch' && inputs.is_release || false }}
+      version: ${{ inputs.version || '' }}
+      semver_increment: ${{ inputs.semver_increment || '' }}
+      reviewer: ${{ inputs.reviewer || '' }}
