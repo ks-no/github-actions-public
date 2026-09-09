@@ -49,7 +49,7 @@ runs:
   steps:
     - name: Trigger Integration Tests
       id: trigger
-      uses: actions/github-script@v8
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         INT_REPO: ${{ inputs.integration-test-repo }}
         INT_WORKFLOW: ${{ inputs.integration-test-workflow }}
@@ -105,7 +105,7 @@ runs:
     - name: Wait for Integration Tests
       id: wait
       if: inputs.wait-for-completion == 'true'
-      uses: actions/github-script@v8
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         CHECK_RUN_ID: ${{ steps.trigger.outputs.check-run-id }}
         POLL_INTERVAL_SECONDS: ${{ inputs.poll-interval-seconds }}

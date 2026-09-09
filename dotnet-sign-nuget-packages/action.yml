@@ -48,7 +48,7 @@ runs:
         echo "${{ inputs.sm-client-cert-file-base64 }}" | base64 --decode > "${SM_CLIENT_CERT_FILE}"
 
     - name: Setup Software Trust Manager and sign
-      uses: digicert/code-signing-software-trust-action@v1
+      uses: digicert/code-signing-software-trust-action@fae23a455ba4bde62b64fd7cb2f81ade788f5a95 # v1.2.1
       with:
         simple-signing-mode: true
         input: ${{ inputs.package-path }}
