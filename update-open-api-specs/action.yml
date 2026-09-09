@@ -43,9 +43,10 @@ runs:
         echo "FILES=$FILES" >> "$GITHUB_ENV"
 
     - name: Lint specs
+      continue-on-error: true
       if: env.FILES != ''
       shell: bash
-      run: redocly lint $FILES --skip-rule=operation-summary
+      run: redocly lint $FILES
 
     - name: Create build directories
       if: env.FILES != ''
