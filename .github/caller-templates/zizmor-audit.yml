@@ -1,5 +1,5 @@
+# Starter workflow for zizmor.
 name: Zizmor Security Audit
-description: Scans GitHub Actions workflow files for security vulnerabilities using zizmor. Runs automatically on every push and pull request.
 
 on:
   push:
@@ -8,12 +8,7 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   audit:
     uses: ks-no/github-actions-public/.github/workflows/zizmor-audit.yml@main
-    with:
-      # Optional: use SARIF output to publish findings in the GitHub Security tab.
-      # Default is 'github' when not set, which writes findings to the job summary/annotations.
-      # output_format: sarif

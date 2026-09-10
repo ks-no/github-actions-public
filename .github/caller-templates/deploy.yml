@@ -1,0 +1,33 @@
+# Backstage starter workflow for deploying a single service.
+# Required secrets: KS_RUNNER_APP_ID, KS_RUNNER_PRIVATE_KEY.
+name: Deploy application
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment.'
+        type: choice
+        required: true
+        options:
+          - dev
+          - test
+          - prod
+      version:
+        description: 'Version number to deploy.'
+        type: string
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    uses: ks-no/github-actions-public/.github/workflows/deploy.yml@main
+    secrets: inherit
+    with:
+      # Defaults to the repo name; change if your chart is named differently.
+      helm_chart: ${{ github.event.repository.name }}
+      environment: ${{ inputs.environment }}
+      version: ${{ inputs.version }}

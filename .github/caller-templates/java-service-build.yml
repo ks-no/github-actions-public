@@ -1,5 +1,7 @@
-name: Build and Deploy Java Service
-description: Builds a Java application, publishes a Docker image, and deploys it to OpenShift via Helm. Supports snapshot and release builds with configurable environments.
+# Backstage starter workflow for a Java service.
+# Required secrets: ARTIFACTORY_USERNAME, ARTIFACTORY_PASSWORD, KS_RUNNER_APP_ID, KS_RUNNER_PRIVATE_KEY,
+# GPG_PRIVATE_KEY, DEPENDENCY_TRACK_API_KEY.
+name: Build and deploy application
 
 on:
   push:
@@ -10,15 +12,31 @@ on:
       is_release:
         description: 'Release build?'
         type: boolean
+        required: false
         default: false
+      semver_increment:
+        description: 'Select semver increment. Leave empty when version is set.'
+        type: choice
+        required: false
+        options:
+          - ''
+          - next major
+          - next minor
+          - next patch
       version:
-        description: 'Version number for release (e.g. 1.2.3). Leave empty for auto.'
+        description: 'Exact release version. Leave empty when using semver_increment.'
         type: string
         required: false
-      environment:
-        description: 'Deploy environment'
+      deploy:
+        description: 'Deploy after the release build finishes.'
+        type: boolean
+        required: true
+        default: false
+      reviewer:
+        description: 'Reviewer used when creating release notes.'
         type: string
-        default: 'dev'
+        required: false
+        default: ''
 
 permissions:
   id-token: write
@@ -28,22 +46,14 @@ permissions:
 jobs:
   build:
     uses: ks-no/github-actions-public/.github/workflows/java-service-build.yml@main
-    secrets:
-      ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
-      ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
-      KS_RUNNER_APP_ID: ${{ secrets.KS_RUNNER_APP_ID }}
-      KS_RUNNER_PRIVATE_KEY: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
-      GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-      DEPENDENCY_TRACK_API_KEY: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+    secrets: inherit
     with:
-      is_release: ${{ inputs.is_release || false }}
+      semver_increment: ${{ inputs.semver_increment || '' }}
+      is_release: ${{ github.event_name == 'workflow_dispatch' && inputs.is_release || false }}
       version: ${{ inputs.version || '' }}
-      environment: ${{ inputs.environment || 'dev' }}
-      # Optional (copy-edit): uncomment to enable deployment after successful build and publish.
-      # autodeploy: true
-      # Optional (copy-edit): uncomment to enable Helm publish/deploy and set chart name.
-      # helm_chart: 'my-service'
-      # Optional (copy-edit): uncomment to override chart location if not in charts/{helm_chart}.
-      # helm_folder: 'charts/my-service'
-      # Optional (copy-edit): uncomment to set reviewer used for release pull request flow.
-      # reviewer: 'team-platform'
+      java_version: 'java21'
+      # Add a Helm chart to this repo, then set helm_chart to its folder name to
+      # enable chart publishing and the 'deploy' input below. Left empty, both are skipped.
+      helm_chart: ''
+      autodeploy: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy || false }}
+      reviewer: ${{ inputs.reviewer || '' }}

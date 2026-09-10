@@ -1,0 +1,16 @@
+# Starter workflow for Dependency-Track license checking.
+name: License Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  license-scan:
+    uses: ks-no/github-actions-public/.github/workflows/license-check.yml@main
+    secrets: inherit

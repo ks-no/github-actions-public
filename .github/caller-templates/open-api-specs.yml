@@ -1,0 +1,16 @@
+# Starter workflow for OpenAPI specs.
+name: OpenAPI Spec CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  open-api-spec-ci:
+    uses: ks-no/github-actions-public/.github/workflows/open-api-specs.yml@main
+    secrets: inherit
