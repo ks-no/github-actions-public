@@ -151,7 +151,7 @@ jobs:
             ${{ inputs.docker_registry }}/${{ steps.version.outputs.app_name }}:${{ steps.version.outputs.image_tag }}
             ${{ github.ref == 'refs/heads/main' && inputs.push_latest_on_main && format('{0}/{1}:latest', inputs.docker_registry, steps.version.outputs.app_name) || '' }}
           cache-from: type=registry,ref=${{ inputs.docker_registry }}/${{ steps.version.outputs.app_name }}:buildcache
-          cache-to: type=registry,ref=${{ inputs.docker_registry }}/${{ steps.version.outputs.app_name }}:buildcache,mode=max,image-manifest=true
+          cache-to: type=registry,ref=${{ inputs.docker_registry }}/${{ steps.version.outputs.app_name }}:buildcache,mode=min,image-manifest=true
           provenance: false
 
       - name: Publish Helm chart
