@@ -30,13 +30,9 @@ jobs:
       KS_RUNNER_APP_ID: ${{ secrets.KS_RUNNER_APP_ID }}
       KS_RUNNER_PRIVATE_KEY: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
       DEPENDENCY_TRACK_API_KEY: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
-      # Optional signing secrets (required by selected signing strategy):
-      # CODE_SIGN_CERT_BASE64: ${{ secrets.CODE_SIGN_CERT_BASE64 }}
-      # CODE_SIGN_PFX_PASS: ${{ secrets.CODE_SIGN_PFX_PASS }}
-      # SM_API_KEY: ${{ secrets.SM_API_KEY }}
-      # SM_CLIENT_CERT_FILE_B64: ${{ secrets.SM_CLIENT_CERT_FILE_B64 }}
-      # SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
-      # SM_CODE_SIGNING_CERT_SHA1_HASH: ${{ secrets.SM_CODE_SIGNING_CERT_SHA1_HASH }}
+      SM_API_KEY: ${{ secrets.SM_API_KEY }}
+      SM_CLIENT_CERT_FILE: ${{ secrets.SM_CLIENT_CERT_FILE }}
+      SM_CLIENT_CERT_PASSWORD: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
     with:
       is-release: ${{ inputs.is-release || false }}
       push-to-nuget-org: ${{ inputs.push-to-nuget-org || false }}

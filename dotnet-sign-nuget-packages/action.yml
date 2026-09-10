@@ -1,5 +1,5 @@
 name: Sign NuGet Packages
-description: Downloads, signs with DigiCert Software Trust Manager, and re-uploads NuGet packages.
+description: Downloads, signs with DigiCert KeyLocker through the NuGet client, and re-uploads NuGet packages.
 
 inputs:
   artifact-name:
@@ -29,6 +29,13 @@ inputs:
   sm-client-cert-password:
     description: 'Password for the PKCS12 client certificate (secret)'
     required: true
+  certificate-fingerprint:
+    description: 'SHA-256 thumbprint of the code signing certificate in KeyLocker. Not a secret.'
+    required: true
+  timestamp-url:
+    description: 'RFC 3161 timestamp server'
+    required: false
+    default: 'http://timestamp.digicert.com'
 
 runs:
   using: composite
@@ -39,28 +46,62 @@ runs:
         name: ${{ inputs.artifact-name }}
         path: ${{ inputs.package-path }}
 
-    # ── Sign package ───────────────────────────────────────────────────────
     - name: Setup SM_CLIENT_CERT_FILE from base64 secret data
-      shell: bash
+      shell: pwsh
+      env:
+        SM_CLIENT_CERT_FILE_BASE64: ${{ inputs.sm-client-cert-file-base64 }}
       run: |
-        export SM_CLIENT_CERT_FILE="${RUNNER_TEMP}/Certificate_pkcs12.p12"
-        echo "SM_CLIENT_CERT_FILE=$SM_CLIENT_CERT_FILE" >> "$GITHUB_ENV"
-        echo "${{ inputs.sm-client-cert-file-base64 }}" | base64 --decode > "${SM_CLIENT_CERT_FILE}"
+        $ErrorActionPreference = 'Stop'
+        $dest = Join-Path $env:RUNNER_TEMP 'Certificate_pkcs12.p12'
+        [System.IO.File]::WriteAllBytes($dest, [System.Convert]::FromBase64String($env:SM_CLIENT_CERT_FILE_BASE64))
 
-    - name: Setup Software Trust Manager and sign
+    - name: Install DigiCert KeyLocker tools and KSP
       uses: digicert/code-signing-software-trust-action@fae23a455ba4bde62b64fd7cb2f81ade788f5a95 # v1.2.1
       with:
-        simple-signing-mode: true
-        input: ${{ inputs.package-path }}
-        keypair-alias: ${{ inputs.sm-keypair-alias }}
+        simple-signing-mode: false
       env:
         SM_HOST: ${{ inputs.sm-host }}
         SM_API_KEY: ${{ inputs.sm-api-key }}
-        SM_CLIENT_CERT_FILE: ${{ env.SM_CLIENT_CERT_FILE }}
+        SM_CLIENT_CERT_FILE: ${{ runner.temp }}\Certificate_pkcs12.p12
         SM_CLIENT_CERT_PASSWORD: ${{ inputs.sm-client-cert-password }}
 
-    - name: Upload signed nupkg
+    - name: Sync KeyLocker certificate into the Windows store
+      shell: pwsh
+      env:
+        SM_HOST: ${{ inputs.sm-host }}
+        SM_API_KEY: ${{ inputs.sm-api-key }}
+        SM_CLIENT_CERT_FILE: ${{ runner.temp }}\Certificate_pkcs12.p12
+        SM_CLIENT_CERT_PASSWORD: ${{ inputs.sm-client-cert-password }}
+        SM_KEYPAIR_ALIAS: ${{ inputs.sm-keypair-alias }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        smctl windows certsync --keypair-alias="$env:SM_KEYPAIR_ALIAS"
+        if ($LASTEXITCODE -ne 0) { throw "smctl windows certsync failed with exit code $LASTEXITCODE" }
+
+    - name: Sign packages with the NuGet client
+      shell: pwsh
+      env:
+        SM_HOST: ${{ inputs.sm-host }}
+        SM_API_KEY: ${{ inputs.sm-api-key }}
+        SM_CLIENT_CERT_FILE: ${{ runner.temp }}\Certificate_pkcs12.p12
+        SM_CLIENT_CERT_PASSWORD: ${{ inputs.sm-client-cert-password }}
+        PACKAGE_PATH: ${{ inputs.package-path }}
+        CERT_FINGERPRINT: ${{ inputs.certificate-fingerprint }}
+        TIMESTAMP_URL: ${{ inputs.timestamp-url }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        nuget sign (Join-Path $env:PACKAGE_PATH '*.nupkg') `
+          -Timestamper $env:TIMESTAMP_URL `
+          -CertificateFingerprint $env:CERT_FINGERPRINT `
+          -HashAlgorithm SHA256 `
+          -Verbosity detailed
+        if ($LASTEXITCODE -ne 0) { throw "nuget sign failed with exit code $LASTEXITCODE" }
+
+    - name: Upload signed packages
       uses: ks-no/github-actions-public/upload-artifact@main
       with:
         name: ${{ inputs.signed-artifact-name }}
-        path: ${{ inputs.package-path }}/*.nupkg
+        if-no-files-found: error
+        path: |
+          ${{ inputs.package-path }}/*.nupkg
+          ${{ inputs.package-path }}/*.snupkg
