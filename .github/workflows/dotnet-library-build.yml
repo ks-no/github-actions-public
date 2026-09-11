@@ -313,7 +313,7 @@ jobs:
       # DigiCert KSP, verifies, and re-uploads as nuget-packages-signed. The action resolves the
       # certificate's SHA-256 fingerprint itself after `smctl windows certsync`; no variable needed.
       - name: Sign packages with KeyLocker
-        uses: ks-no/github-actions-public/dotnet-sign-nuget-packages@80b4bea539645aa3dc4cf810537ab3384abd0798
+        uses: ks-no/github-actions-public/dotnet-sign-nuget-packages@629022567655e85794c5fbe4ff2577a787e0f644
         with:
           artifact-name: nuget-packages-unsigned
           package-path: packages
