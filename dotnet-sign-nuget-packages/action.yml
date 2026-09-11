@@ -1,5 +1,8 @@
 name: Sign NuGet Packages
-description: Downloads, signs with DigiCert KeyLocker through the NuGet client, and re-uploads NuGet packages.
+description: >-
+  Downloads NuGet packages, signs them with the NuGet client using a DigiCert KeyLocker
+  certificate (through the DigiCert KSP), verifies the signatures and re-uploads them.
+  Requires a Windows runner.
 
 inputs:
   artifact-name:
@@ -30,12 +33,24 @@ inputs:
     description: 'Password for the PKCS12 client certificate (secret)'
     required: true
   certificate-fingerprint:
-    description: 'SHA-256 thumbprint of the code signing certificate in KeyLocker. Not a secret.'
-    required: true
+    description: >-
+      Optional SHA-256 fingerprint override (not a secret). Leave empty to derive it from the
+      certificate that `smctl windows certsync` places in Cert:\CurrentUser\My for the keypair
+      alias. NuGet 7+ rejects SHA-1 fingerprints (NU3043), so this must be SHA-256 if set.
+    required: false
+    default: ''
   timestamp-url:
     description: 'RFC 3161 timestamp server'
     required: false
     default: 'http://timestamp.digicert.com'
+
+outputs:
+  certificate-fingerprint:
+    description: 'SHA-256 fingerprint of the certificate the packages were signed with'
+    value: ${{ steps.cert.outputs.fingerprint }}
+  certificate-subject:
+    description: 'Subject of the certificate the packages were signed with'
+    value: ${{ steps.cert.outputs.subject }}
 
 runs:
   using: composite
@@ -55,6 +70,8 @@ runs:
         $dest = Join-Path $env:RUNNER_TEMP 'Certificate_pkcs12.p12'
         [System.IO.File]::WriteAllBytes($dest, [System.Convert]::FromBase64String($env:SM_CLIENT_CERT_FILE_BASE64))
 
+    # simple-signing-mode: false installs the full KeyLocker tool set (smctl + KSP). We never
+    # sign with smctl itself; nuget.exe signs through the KSP.
     - name: Install DigiCert KeyLocker tools and KSP
       uses: digicert/code-signing-software-trust-action@fae23a455ba4bde62b64fd7cb2f81ade788f5a95 # v1.2.1
       with:
@@ -65,7 +82,21 @@ runs:
         SM_CLIENT_CERT_FILE: ${{ runner.temp }}\Certificate_pkcs12.p12
         SM_CLIENT_CERT_PASSWORD: ${{ inputs.sm-client-cert-password }}
 
-    - name: Sync KeyLocker certificate into the Windows store
+    - name: KeyLocker diagnostics (healthcheck, KSP)
+      continue-on-error: true
+      shell: pwsh
+      env:
+        SM_HOST: ${{ inputs.sm-host }}
+        SM_API_KEY: ${{ inputs.sm-api-key }}
+        SM_CLIENT_CERT_FILE: ${{ runner.temp }}\Certificate_pkcs12.p12
+        SM_CLIENT_CERT_PASSWORD: ${{ inputs.sm-client-cert-password }}
+      run: |
+        $ErrorActionPreference = 'Continue'
+        smctl healthcheck
+        smctl windows ksp list
+
+    - name: Sync KeyLocker certificate and resolve its SHA-256 fingerprint
+      id: cert
       shell: pwsh
       env:
         SM_HOST: ${{ inputs.sm-host }}
@@ -73,10 +104,59 @@ runs:
         SM_CLIENT_CERT_FILE: ${{ runner.temp }}\Certificate_pkcs12.p12
         SM_CLIENT_CERT_PASSWORD: ${{ inputs.sm-client-cert-password }}
         SM_KEYPAIR_ALIAS: ${{ inputs.sm-keypair-alias }}
+        CERT_FINGERPRINT_OVERRIDE: ${{ inputs.certificate-fingerprint }}
       run: |
         $ErrorActionPreference = 'Stop'
-        smctl windows certsync --keypair-alias="$env:SM_KEYPAIR_ALIAS"
+
+        # Capture stdout only. Do not merge stderr (2>&1) under ErrorActionPreference=Stop.
+        $syncOutput = @(& smctl windows certsync --keypair-alias="$env:SM_KEYPAIR_ALIAS")
+        $syncOutput | ForEach-Object { Write-Host $_ }
         if ($LASTEXITCODE -ne 0) { throw "smctl windows certsync failed with exit code $LASTEXITCODE" }
+
+        # certsync prints "... SHA1 Fingerprint: <40 hex>". Use it to pick the right certificate.
+        $sha1 = $null
+        if (($syncOutput -join "`n") -match 'SHA1 Fingerprint:\s*([0-9a-fA-F]{40})') {
+          $sha1 = $Matches[1].ToUpperInvariant()
+        }
+
+        $store = @(Get-ChildItem Cert:\CurrentUser\My)
+        $cert = $null
+        if ($sha1) {
+          $cert = $store | Where-Object { $_.Thumbprint -eq $sha1 } | Select-Object -First 1
+        }
+        if (-not $cert) {
+          # Fallback: exactly one code-signing certificate with a private key in the store.
+          $codeSigningOid = '1.3.6.1.5.5.7.3.3'
+          $candidates = @($store | Where-Object {
+            $_.HasPrivateKey -and ($_.EnhancedKeyUsageList.ObjectId -contains $codeSigningOid)
+          })
+          if ($candidates.Count -eq 1) { $cert = $candidates[0] }
+        }
+        if (-not $cert) {
+          Write-Host "Contents of Cert:\CurrentUser\My:"
+          $store | Format-Table Thumbprint, Subject, NotAfter, HasPrivateKey -AutoSize | Out-String | Write-Host
+          throw "Could not identify the code signing certificate synced for keypair alias '$env:SM_KEYPAIR_ALIAS' in Cert:\CurrentUser\My"
+        }
+        if ($cert.NotAfter -lt (Get-Date)) {
+          throw "Certificate '$($cert.Subject)' expired $($cert.NotAfter.ToString('u'))"
+        }
+
+        $sha256 = $cert.GetCertHashString([System.Security.Cryptography.HashAlgorithmName]::SHA256)
+        $fingerprint = $sha256
+        if (-not [string]::IsNullOrWhiteSpace($env:CERT_FINGERPRINT_OVERRIDE)) {
+          $fingerprint = $env:CERT_FINGERPRINT_OVERRIDE.Trim()
+          Write-Host "::notice::Using certificate-fingerprint override $fingerprint (synced certificate has SHA-256 $sha256)"
+        }
+
+        Write-Host "Signing certificate"
+        Write-Host "  Subject : $($cert.Subject)"
+        Write-Host "  Issuer  : $($cert.Issuer)"
+        Write-Host "  Expires : $($cert.NotAfter.ToString('u'))"
+        Write-Host "  SHA-1   : $($cert.Thumbprint)"
+        Write-Host "  SHA-256 : $sha256"
+
+        "fingerprint=$fingerprint" >> $env:GITHUB_OUTPUT
+        "subject=$($cert.Subject)" >> $env:GITHUB_OUTPUT
 
     - name: Sign packages with the NuGet client
       shell: pwsh
@@ -86,16 +166,39 @@ runs:
         SM_CLIENT_CERT_FILE: ${{ runner.temp }}\Certificate_pkcs12.p12
         SM_CLIENT_CERT_PASSWORD: ${{ inputs.sm-client-cert-password }}
         PACKAGE_PATH: ${{ inputs.package-path }}
-        CERT_FINGERPRINT: ${{ inputs.certificate-fingerprint }}
+        CERT_FINGERPRINT: ${{ steps.cert.outputs.fingerprint }}
         TIMESTAMP_URL: ${{ inputs.timestamp-url }}
       run: |
         $ErrorActionPreference = 'Stop'
+        if ([string]::IsNullOrWhiteSpace($env:CERT_FINGERPRINT)) { throw "No certificate fingerprint resolved; refusing to sign" }
+
+        $packages = @(Get-ChildItem -Path $env:PACKAGE_PATH -Filter '*.nupkg' -File)
+        if ($packages.Count -eq 0) { throw "No .nupkg files found in '$env:PACKAGE_PATH'" }
+        Write-Host "Signing $($packages.Count) package(s):"
+        $packages | ForEach-Object { Write-Host "  $($_.Name)" }
+
         nuget sign (Join-Path $env:PACKAGE_PATH '*.nupkg') `
-          -Timestamper $env:TIMESTAMP_URL `
           -CertificateFingerprint $env:CERT_FINGERPRINT `
+          -CertificateStoreLocation CurrentUser `
+          -CertificateStoreName My `
+          -Timestamper $env:TIMESTAMP_URL `
           -HashAlgorithm SHA256 `
+          -NonInteractive `
           -Verbosity detailed
         if ($LASTEXITCODE -ne 0) { throw "nuget sign failed with exit code $LASTEXITCODE" }
+
+    - name: Verify signatures
+      shell: pwsh
+      env:
+        PACKAGE_PATH: ${{ inputs.package-path }}
+        CERT_FINGERPRINT: ${{ steps.cert.outputs.fingerprint }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        nuget verify -Signatures (Join-Path $env:PACKAGE_PATH '*.nupkg') `
+          -CertificateFingerprint $env:CERT_FINGERPRINT `
+          -NonInteractive `
+          -Verbosity detailed
+        if ($LASTEXITCODE -ne 0) { throw "nuget verify failed with exit code $LASTEXITCODE" }
 
     - name: Upload signed packages
       uses: ks-no/github-actions-public/upload-artifact@main

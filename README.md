@@ -55,6 +55,23 @@ These wrappers are:
 
 More may be added in the future.
 
+### NuGet package signing (`dotnet-sign-nuget-packages`)
+
+Signs `.nupkg` files with a DigiCert KeyLocker code signing certificate and re-uploads them as a new artifact.
+It must run on a `windows-*` runner. The reusable `dotnet-library-build` workflow already uses it for release builds;
+custom workflows can call it directly.
+
+Configuration it expects (all at organization level today):
+
+- Variables: `SM_HOST`, `SM_KEY_PAIR_ALIAS`
+- Secrets: `SM_API_KEY`, `SM_CLIENT_CERT_FILE` (base64 of the service user's `.p12`), `SM_CLIENT_CERT_PASSWORD`
+
+The action installs the KeyLocker tools, runs `smctl windows certsync` for the keypair alias, derives the certificate's
+SHA-256 fingerprint from the Windows certificate store, signs with `nuget sign` through the DigiCert KSP and verifies
+the result with `nuget verify` before uploading. It never uses `smctl sign --simple`: DigiCert does not list `.nupkg`
+as supported for simple signing, and the signatures it produced had a non-canonical DER encoding that nuget.org's
+repository countersigning broke (see [NuGet/NuGetGallery#10942](https://github.com/NuGet/NuGetGallery/issues/10942)).
+
 ## Runners
 
 KS Digital utilizes both Github's runners (for public repos), and self-hosted runners (for private repos). All runners are Linux-based.

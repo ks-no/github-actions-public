@@ -309,7 +309,9 @@ jobs:
     timeout-minutes: 30
     steps:
       # Pinned to a known-good SHA so a change to the action can never burn a signature.
-      # Downloads nuget-packages-unsigned, signs in place, re-uploads as nuget-packages-signed.
+      # Downloads nuget-packages-unsigned, signs in place with the NuGet client through the
+      # DigiCert KSP, verifies, and re-uploads as nuget-packages-signed. The action resolves the
+      # certificate's SHA-256 fingerprint itself after `smctl windows certsync`; no variable needed.
       - name: Sign packages with KeyLocker
         uses: ks-no/github-actions-public/dotnet-sign-nuget-packages@80b4bea539645aa3dc4cf810537ab3384abd0798
         with:
@@ -318,7 +320,6 @@ jobs:
           signed-artifact-name: nuget-packages-signed
           sm-host: ${{ vars.SM_HOST }}
           sm-keypair-alias: ${{ vars.SM_KEY_PAIR_ALIAS }}
-          certificate-fingerprint: ${{ vars.SM_CODE_SIGNING_CERT_SHA256_HASH }}
           sm-api-key: ${{ secrets.SM_API_KEY }}
           sm-client-cert-file-base64: ${{ secrets.SM_CLIENT_CERT_FILE }}
           sm-client-cert-password: ${{ secrets.SM_CLIENT_CERT_PASSWORD }}
