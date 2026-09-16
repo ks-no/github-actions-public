@@ -51,13 +51,22 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Switch Java Version
+      - name: Validate Java Version
+        id: validate_java_version
         run: |
-          JAVA_VERSION_CMD="${{ inputs.java_version }}"
-          if [[ "$JAVA_VERSION_CMD" =~ ^[0-9]+$ ]]; then
-            JAVA_VERSION_CMD="java$JAVA_VERSION_CMD"
-          fi
-          "$JAVA_VERSION_CMD"
+          JAVA_VERSION="${{ inputs.java_version }}"                                                                                                                                                                                                                                                      
+          JAVA_VERSION="${JAVA_VERSION#java}"   # 'java17' -> '17'                                                                                                                                                                                                                                       
+          if ! [[ "$JAVA_VERSION" =~ ^[0-9]+$ ]]; then                                                                                                                                                                                                                                                   
+            echo "Ugyldig java_version: '${{ inputs.java_version }}'" >&2                                                                                                                                                                                                                                
+            exit 1                                                                                                                                                                                                                                                                                       
+          fi                                                                                                                                                                                                                                                                                             
+          echo "java_version=$JAVA_VERSION" >> "$GITHUB_OUTPUT"                                                                                                                                                                                                                                          
+
+      - name: Switch Java Version
+        uses: ks-no/github-actions-public/setup-java@main
+        with:
+          java-version: ${{ steps.validate_java_version.outputs.java_version }}
+          distribution: 'temurin'
 
       # Egen cache-nøkkel (ikke delt med biblioteksbyggets "Cache Maven
       # packages"-cache): denne workflowen laster ned et mye større sett
