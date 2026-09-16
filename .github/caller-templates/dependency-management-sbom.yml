@@ -24,3 +24,4 @@ jobs:
       # cyclonedx_plugin_version: '2.9.1'
       # output_bom_name: 'dependency-management-bom'
       # sbom_project_name: 'my-repo-dependency-management'
+      # is_public: true # true if this repository is public, false otherwise

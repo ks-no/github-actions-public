@@ -23,6 +23,11 @@ on:
         required: false
         type: string
         default: ''
+      is_public:
+        description: 'Is this repository public?'
+        type: boolean
+        required: false
+        default: false
     secrets:
       ARTIFACTORY_USERNAME:
         required: true
@@ -36,7 +41,7 @@ permissions:
 
 jobs:
   sbom:
-    runs-on: [self-hosted, x64]
+    runs-on: ${{ inputs.is_public && 'ubuntu-latest' || fromJSON('["self-hosted", "x64"]') }}
     timeout-minutes: 30
     steps:
       - name: Checkout code
