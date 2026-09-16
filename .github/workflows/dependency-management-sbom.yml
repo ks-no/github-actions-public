@@ -51,6 +51,11 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: install xsltproc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xsltproc
+
       - name: Validate Java Version
         id: validate_java_version
         run: |
