@@ -106,6 +106,7 @@ jobs:
         with:
           version: ${{ inputs.version }}
           semver_increment: ${{ inputs.semver_increment }}
+          is_release: ${{ inputs.is_release }}
 
       - name: Zizmor Scan
         continue-on-error: true
