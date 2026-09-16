@@ -29,10 +29,25 @@ on:
         type: string
         default: 'dev'
       autodeploy:
-        description: 'Set true to deploy after successful build/publish on non-PR events.'
+        description: 'Set true to always deploy after successful build/publish.'
         required: false
         type: boolean
         default: true
+      is_release:
+        description: 'Is this a release?'
+        required: false
+        type: boolean
+        default: false
+      version:
+        description: 'The exact version to release. Requires is_release = true.'
+        required: false
+        type: string
+        default: ''
+      semver_increment:
+        description: 'One of: "next major", "next minor", or "next patch". Requires is_release = true.'
+        required: false
+        type: string
+        default: ''
       node_version:
         description: 'Node.js version input reserved for future use.'
         required: false
@@ -92,9 +107,9 @@ jobs:
       group: ${{ format('autobuild-{0}-{1}', github.repository, github.ref_name) }}
       cancel-in-progress: true
     outputs:
-      project_version: ${{ steps.version.outputs.project_version }}
-      image_tag: ${{ steps.version.outputs.image_tag }}
-      chart_version: ${{ steps.version.outputs.chart_version }}
+      project_version: ${{ steps.version.outputs.version }}
+      image_tag: ${{ steps.tags.outputs.image_tag }}
+      chart_version: ${{ steps.tags.outputs.chart_version }}
     steps:
       - name: Checkout code
         uses: ks-no/github-actions-public/checkout@main
@@ -107,11 +122,27 @@ jobs:
         continue-on-error: true
         uses: ks-no/github-actions-public/zizmor-scan@main
 
-      - name: Resolve app name and version from package.json
+      - name: Validate version input
+        if: inputs.is_release == 'true'
+        uses: ks-no/github-actions-public/validate-version-inputs@main
+        with:
+          version: ${{ inputs.version }}
+          semver_increment: ${{ inputs.semver_increment }}
+          is_release: ${{ inputs.is_release }}
+
+      - name: Resolve version
         id: version
+        uses: ks-no/github-actions-public/complete-version-resolvement@main
+        with:
+          version: ${{ inputs.version }}
+          semver_increment: ${{ inputs.semver_increment }}
+          is_release: ${{ inputs.is_release }}
+
+      - name: Resolve app name and tags
+        id: tags
         shell: bash
         run: |
-          PROJECT_VERSION=$(jq -r '.version' package.json)
+          PROJECT_VERSION="${{ steps.version.outputs.version }}"
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
 
           IMAGE_TAG="${PROJECT_VERSION}-${SHORT_SHA}"
@@ -123,7 +154,6 @@ jobs:
           fi
 
           echo "app_name=$APP_NAME" >> "$GITHUB_OUTPUT"
-          echo "project_version=$PROJECT_VERSION" >> "$GITHUB_OUTPUT"
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
           echo "chart_version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
 
@@ -148,19 +178,19 @@ jobs:
           file: ${{ inputs.dockerfile_path }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ inputs.docker_registry }}/${{ steps.version.outputs.app_name }}:${{ steps.version.outputs.image_tag }}
-            ${{ github.ref == 'refs/heads/main' && inputs.push_latest_on_main && format('{0}/{1}:latest', inputs.docker_registry, steps.version.outputs.app_name) || '' }}
-          cache-from: type=registry,ref=${{ inputs.docker_registry }}/${{ steps.version.outputs.app_name }}:buildcache
-          cache-to: type=registry,ref=${{ inputs.docker_registry }}/${{ steps.version.outputs.app_name }}:buildcache,mode=min,image-manifest=true
+            ${{ inputs.docker_registry }}/${{ steps.tags.outputs.app_name }}:${{ steps.tags.outputs.image_tag }}
+            ${{ github.ref == 'refs/heads/main' && inputs.push_latest_on_main && format('{0}/{1}:latest', inputs.docker_registry, steps.tags.outputs.app_name) || '' }}
+          cache-from: type=registry,ref=${{ inputs.docker_registry }}/${{ steps.tags.outputs.app_name }}:buildcache
+          cache-to: type=registry,ref=${{ inputs.docker_registry }}/${{ steps.tags.outputs.app_name }}:buildcache,mode=min,image-manifest=true
           provenance: false
 
       - name: Publish Helm chart
-        if: github.event_name != 'pull_request' && inputs.helm_chart != ''
+        if: inputs.helm_chart != ''
         uses: ks-no/github-actions-public/publish-helm@main
         with:
           chart_name: ${{ inputs.helm_chart }}
-          chart_version: ${{ steps.version.outputs.chart_version }}
-          image_tag: ${{ steps.version.outputs.image_tag }}
+          chart_version: ${{ steps.tags.outputs.chart_version }}
+          image_tag: ${{ steps.tags.outputs.image_tag }}
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           need_jfrog_setup: 'true'
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
@@ -168,12 +198,12 @@ jobs:
           helm_folder: ${{ inputs.helm_folder || format('charts/{0}', inputs.helm_chart) }}
 
       - name: Deploy application
-        if: github.event_name != 'pull_request' && inputs.autodeploy == true && inputs.helm_chart != ''
+        if: inputs.autodeploy == true && inputs.helm_chart != ''
         uses: ks-no/github-actions-public/deploy@main
         with:
           helm_chart: ${{ inputs.helm_chart }}
           environment: ${{ inputs.environment }}
-          version: ${{ steps.version.outputs.chart_version }}
+          version: ${{ steps.tags.outputs.chart_version }}
           ks_github_app_id: ${{ inputs.ks_runner_app_id }}
           ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
 
@@ -182,9 +212,9 @@ jobs:
         run: |
           {
             echo "## Node.js Service Build Summary"
-            echo "- project_version: ${{ steps.version.outputs.project_version }}"
-            echo "- image_tag: ${{ steps.version.outputs.image_tag }}"
-            echo "- chart_version: ${{ steps.version.outputs.chart_version }}"
+            echo "- project_version: ${{ steps.version.outputs.version }}"
+            echo "- image_tag: ${{ steps.tags.outputs.image_tag }}"
+            echo "- chart_version: ${{ steps.tags.outputs.chart_version }}"
             echo "- deploy_enabled: ${{ inputs.autodeploy }}"
-            echo "- deploy_executed: ${{ github.event_name != 'pull_request' && inputs.autodeploy }}"
+            echo "- deploy_executed: ${{ inputs.autodeploy }}"
           } >> "$GITHUB_STEP_SUMMARY"
