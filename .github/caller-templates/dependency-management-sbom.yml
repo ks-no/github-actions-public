@@ -1,0 +1,26 @@
+name: Dependency Management SBOM
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sbom:
+    uses: ks-no/github-actions-public/.github/workflows/dependency-management-sbom.yml@main
+    secrets:
+      ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_USERNAME }}
+      ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
+      DEPENDENCY_TRACK_API_KEY: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+    with:
+      # Optional (copy-edit): uncomment to override defaults.
+      # java_version: 'java21'
+      # cyclonedx_plugin_version: '2.9.1'
+      # output_bom_name: 'dependency-management-bom'
+      # sbom_project_name: 'my-repo-dependency-management'

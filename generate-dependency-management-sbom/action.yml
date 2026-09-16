@@ -1,0 +1,53 @@
+name: 'Generate Dependency Management SBOM'
+description: >
+  Genererer en CycloneDX SBOM som dekker alt som er versjonspinnet i et
+  Maven-prosjekts <dependencyManagement> (inkludert det som kommer inn via
+  importerte BOM-er), uavhengig av om noen reell modul i prosjektet faktisk
+  bruker avhengighetene. Materialiserer dependencyManagement som ekte
+  <dependency>-elementer i en syntetisk pom og kjører cyclonedx-maven-plugin
+  direkte mot den.
+
+inputs:
+  sbom_group_id:
+    description: 'groupId for den syntetiske pom-en som SBOM-en genereres fra.'
+    required: false
+    default: 'no.ks.fiks.sbom'
+  sbom_artifact_id:
+    description: 'artifactId for den syntetiske pom-en.'
+    required: false
+    default: ${{ github.event.repository.name }}-dependency-management-sbom
+  mvn_command:
+    description: 'Kommando som kjører Maven, f.eks. "jfrog mvn" for Artifactory-oppløsning.'
+    required: false
+    default: 'mvn'
+  output_bom_name:
+    description: 'Filnavn (uten .json) for den genererte SBOM-en.'
+    required: false
+    default: 'dependency-management-bom'
+  cyclonedx_plugin_version:
+    description: >
+      Versjon av cyclonedx-maven-plugin. Ikke dependabot-sporet siden den
+      kalles direkte via fullt kvalifisert goal fremfor en <plugin>-deklarasjon
+      i en reell pom.xml - oppdater manuelt ved behov.
+    required: false
+    default: '2.9.1'
+
+outputs:
+  bom_file:
+    description: 'Sti (relativ til repo-roten) til den genererte CycloneDX SBOM-filen (JSON).'
+    value: ${{ steps.generate.outputs.bom_file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Generate dependency-management SBOM
+      id: generate
+      shell: bash
+      env:
+        SBOM_GROUP_ID: ${{ inputs.sbom_group_id }}
+        SBOM_ARTIFACT_ID: ${{ inputs.sbom_artifact_id }}
+        MVN: ${{ inputs.mvn_command }}
+        OUTPUT_BOM_NAME: ${{ inputs.output_bom_name }}
+        CYCLONEDX_PLUGIN_VERSION: ${{ inputs.cyclonedx_plugin_version }}
+      run: |
+        bash "${GITHUB_ACTION_PATH}/generate-sbom.sh"
