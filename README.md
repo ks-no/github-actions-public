@@ -32,6 +32,7 @@ If your repo demands that all Actions workflow calls are pinned to a commit SHA,
 - `deploy` *(to deploy a service with Helm; the Helm-chart values must already have been populated)*
 - `open-api-specs` *(to publish OpenAPI spec files for spec-first projects)*
 - `license-check` *(to check project licenses against Dependency-Track)*
+- `dependency-management-sbom` *(to generate and publish a CycloneDX SBOM covering a Maven project's entire `<dependencyManagement>`, for parent POMs)*
 - `zizmor-audit` *(to lint workflow files)*
 
 ## Composites

@@ -1,0 +1,134 @@
+name: 'Dependency Management SBOM reusable workflow'
+
+on:
+  workflow_call:
+    inputs:
+      java_version:
+        description: 'The Java version to use (e.g., java21).'
+        required: false
+        type: string
+        default: 'java21'
+      cyclonedx_plugin_version:
+        description: 'Versjon av cyclonedx-maven-plugin. Ikke dependabot-sporet - oppdater manuelt ved behov.'
+        required: false
+        type: string
+        default: '2.9.1'
+      output_bom_name:
+        description: 'Filnavn (uten .json) for den genererte SBOM-en.'
+        required: false
+        type: string
+        default: 'dependency-management-bom'
+      sbom_project_name:
+        description: 'Dependency-Track- og Artifactory-prosjektnavn. Default: "<repo>-dependency-management".'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      ARTIFACTORY_USERNAME:
+        required: true
+      ARTIFACTORY_PASSWORD:
+        required: true
+      DEPENDENCY_TRACK_API_KEY:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  sbom:
+    runs-on: [self-hosted, x64]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: ks-no/github-actions-public/checkout@main
+        with:
+          submodules: false
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Switch Java Version
+        run: |
+          JAVA_VERSION_CMD="${{ inputs.java_version }}"
+          if [[ "$JAVA_VERSION_CMD" =~ ^[0-9]+$ ]]; then
+            JAVA_VERSION_CMD="java$JAVA_VERSION_CMD"
+          fi
+          "$JAVA_VERSION_CMD"
+
+      # Egen cache-nøkkel (ikke delt med biblioteksbyggets "Cache Maven
+      # packages"-cache): denne workflowen laster ned et mye større sett
+      # artefakter (hele dependencyManagement) enn det biblioteksbygget
+      # faktisk trenger for eksempelmodulene. Deling ville tvunget
+      # biblioteksbygget til å restore en unødvendig stor cache.
+      - name: Cache Maven packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 #v6.1.0
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-sbom-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-sbom-
+
+      - name: Prepare JFrog CLI
+        uses: ks-no/github-actions-public/prepare-the-frog@main
+        with:
+          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+
+      # Gjenbruker den etablerte "git describe"-baserte versjonsberegningen
+      # med is_release=false: på en ren tag-commit (release) blir resultatet
+      # f.eks. "6.2.0", på alle andre commits "6.2.0-3-gcafebabe".
+      - name: Resolve version from git describe
+        id: version
+        uses: ks-no/github-actions-public/complete-version-resolvement@main
+        with:
+          is_release: false
+
+      # Ikke en egen input noe sted - utledes fra formen på git describe-
+      # resultatet over: fravær av "-N-gHASH"-halen betyr at denne commiten
+      # sitter nøyaktig på en release-tag.
+      - name: Derive release status from resolved version
+        id: release_status
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.resolved_version }}"
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Commit is tagged as a release ($VERSION)"
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+            echo "project_version=release" >> "$GITHUB_OUTPUT"
+          else
+            echo "Commit is not a release tag ($VERSION)"
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+            echo "project_version=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve effective SBOM project name
+        id: project_name
+        shell: bash
+        env:
+          PROJECT_NAME_INPUT: ${{ inputs.sbom_project_name }}
+          DEFAULT_PROJECT_NAME: ${{ github.event.repository.name }}-dependency-management
+        run: |
+          set -euo pipefail
+          EFFECTIVE_PROJECT_NAME="$PROJECT_NAME_INPUT"
+          if [[ -z "$EFFECTIVE_PROJECT_NAME" ]]; then
+            EFFECTIVE_PROJECT_NAME="$DEFAULT_PROJECT_NAME"
+          fi
+          echo "project_name=$EFFECTIVE_PROJECT_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Generate dependency-management SBOM
+        id: generate_sbom
+        uses: ks-no/github-actions-public/generate-dependency-management-sbom@main
+        with:
+          mvn_command: 'jfrog mvn'
+          output_bom_name: ${{ inputs.output_bom_name }}
+          cyclonedx_plugin_version: ${{ inputs.cyclonedx_plugin_version }}
+
+      - name: SBOM Upload and Report
+        uses: ks-no/github-actions-public/sbom-upload-and-report@main
+        with:
+          dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+          is_release: ${{ steps.release_status.outputs.is_release }}
+          project_name: ${{ steps.project_name.outputs.project_name }}
+          project_version: ${{ steps.release_status.outputs.project_version }}
+          bom_file: ${{ steps.generate_sbom.outputs.bom_file }}
+          artifactory_repository_name: ${{ steps.project_name.outputs.project_name }}
+          artifactory_artifact_version: ${{ steps.version.outputs.resolved_version }}
