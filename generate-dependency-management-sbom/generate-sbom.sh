@@ -13,6 +13,9 @@
 set -euo pipefail
 
 MVN="${MVN:-mvn}"
+WORKING_DIRECTORY="${WORKING_DIRECTORY:-.}"
+
+cd "$WORKING_DIRECTORY"
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
@@ -39,5 +42,13 @@ $MVN -T 1C -f "$WORKDIR/pom.xml" \
 
 mkdir -p target
 cp "$WORKDIR/target/bom.json" "target/${OUTPUT_BOM_NAME}.json"
-echo "bom_file=target/${OUTPUT_BOM_NAME}.json" >> "$GITHUB_OUTPUT"
-echo "==> Skrev target/${OUTPUT_BOM_NAME}.json"
+
+# bom_file skal være relativ til repo-roten (steget etterpå leser den derfra),
+# ikke relativ til $WORKING_DIRECTORY som vi har cd-et inn i her.
+if [[ "$WORKING_DIRECTORY" == "." ]]; then
+  BOM_FILE="target/${OUTPUT_BOM_NAME}.json"
+else
+  BOM_FILE="${WORKING_DIRECTORY}/target/${OUTPUT_BOM_NAME}.json"
+fi
+echo "bom_file=${BOM_FILE}" >> "$GITHUB_OUTPUT"
+echo "==> Skrev ${BOM_FILE}"

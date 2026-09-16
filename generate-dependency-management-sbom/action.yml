@@ -31,6 +31,13 @@ inputs:
       i en reell pom.xml - oppdater manuelt ved behov.
     required: false
     default: '2.9.1'
+  working_directory:
+    description: >
+      Katalog (relativ til repo-roten) der pom.xml for prosjektet som skal
+      SBOM-skannes ligger. Brukes for å skanne en annen modul enn rot-pom-en,
+      f.eks. en super-pom lenger ned i et multi-modul-repo.
+    required: false
+    default: '.'
 
 outputs:
   bom_file:
@@ -49,5 +56,6 @@ runs:
         MVN: ${{ inputs.mvn_command }}
         OUTPUT_BOM_NAME: ${{ inputs.output_bom_name }}
         CYCLONEDX_PLUGIN_VERSION: ${{ inputs.cyclonedx_plugin_version }}
+        WORKING_DIRECTORY: ${{ inputs.working_directory }}
       run: |
         bash "${GITHUB_ACTION_PATH}/generate-sbom.sh"
