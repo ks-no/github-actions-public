@@ -364,8 +364,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app_token.outputs.app_token }}
         with:
-          tag_name: ${{ inputs.version }}
-          name: "Release ${{ inputs.version }}"
+          tag_name: ${{ steps.resolve_version.outputs.resolved_version }}
+          name: "Release ${{ steps.resolve_version.outputs.resolved_version }}"
           body: ${{ steps.generate_body.outputs.release_body }}
           draft: false
           prerelease: false
