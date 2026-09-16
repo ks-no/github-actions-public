@@ -24,4 +24,7 @@ jobs:
       # cyclonedx_plugin_version: '2.9.1'
       # output_bom_name: 'dependency-management-bom'
       # sbom_project_name: 'my-repo-dependency-management'
+      # working_directory: 'some-submodule' # scan a pom.xml other than the repo root's
+      # sbom_group_id: 'no.ks.fiks.sbom'
+      # sbom_artifact_id: 'my-repo-dependency-management-sbom'
       # is_public: true # true if this repository is public, false otherwise

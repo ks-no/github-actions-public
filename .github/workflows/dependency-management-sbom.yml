@@ -23,6 +23,24 @@ on:
         required: false
         type: string
         default: ''
+      working_directory:
+        description: >
+          Katalog (relativ til repo-roten) der pom.xml for prosjektet som skal
+          SBOM-skannes ligger. Brukes for å skanne en annen modul enn
+          rot-pom-en, f.eks. en super-pom lenger ned i et multi-modul-repo.
+        required: false
+        type: string
+        default: '.'
+      sbom_group_id:
+        description: 'groupId for den syntetiske pom-en som SBOM-en genereres fra.'
+        required: false
+        type: string
+        default: 'no.ks.fiks.sbom'
+      sbom_artifact_id:
+        description: 'artifactId for den syntetiske pom-en. Default: "<repo>-dependency-management-sbom".'
+        required: false
+        type: string
+        default: ''
       is_public:
         description: 'Is this repository public?'
         type: boolean
@@ -133,6 +151,20 @@ jobs:
           fi
           echo "project_name=$EFFECTIVE_PROJECT_NAME" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve effective SBOM artifact id
+        id: artifact_id
+        shell: bash
+        env:
+          ARTIFACT_ID_INPUT: ${{ inputs.sbom_artifact_id }}
+          DEFAULT_ARTIFACT_ID: ${{ github.event.repository.name }}-dependency-management-sbom
+        run: |
+          set -euo pipefail
+          EFFECTIVE_ARTIFACT_ID="$ARTIFACT_ID_INPUT"
+          if [[ -z "$EFFECTIVE_ARTIFACT_ID" ]]; then
+            EFFECTIVE_ARTIFACT_ID="$DEFAULT_ARTIFACT_ID"
+          fi
+          echo "artifact_id=$EFFECTIVE_ARTIFACT_ID" >> "$GITHUB_OUTPUT"
+
       - name: Generate dependency-management SBOM
         id: generate_sbom
         uses: ks-no/github-actions-public/generate-dependency-management-sbom@main
@@ -140,6 +172,9 @@ jobs:
           mvn_command: 'jfrog mvn'
           output_bom_name: ${{ inputs.output_bom_name }}
           cyclonedx_plugin_version: ${{ inputs.cyclonedx_plugin_version }}
+          working_directory: ${{ inputs.working_directory }}
+          sbom_group_id: ${{ inputs.sbom_group_id }}
+          sbom_artifact_id: ${{ steps.artifact_id.outputs.artifact_id }}
 
       - name: SBOM Upload and Report
         uses: ks-no/github-actions-public/sbom-upload-and-report@main
