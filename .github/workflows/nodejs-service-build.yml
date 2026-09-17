@@ -137,16 +137,15 @@ jobs:
           version: ${{ inputs.version }}
           semver_increment: ${{ inputs.semver_increment }}
           is_release: ${{ inputs.is_release }}
+          snapshot_string: '-'
 
       - name: Resolve app name and tags
         id: tags
         shell: bash
         run: |
-          PROJECT_VERSION="${{ steps.version.outputs.resolved_version }}"
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-
-          IMAGE_TAG="${PROJECT_VERSION}-${SHORT_SHA}"
-          CHART_VERSION="${PROJECT_VERSION}-sha${SHORT_SHA}"
+          VERSION_NUMBER=${VERSION%-*}
+          SHORT_SHA=${VERSION#*-}
+          CHART_VERSION="${VERSION_NUMBER}-sha${SHORT_SHA}"
 
           APP_NAME="${{ inputs.app_name }}"
           if [ -z "$APP_NAME" ]; then
@@ -154,8 +153,10 @@ jobs:
           fi
 
           echo "app_name=$APP_NAME" >> "$GITHUB_OUTPUT"
-          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$VERSION" >> "$GITHUB_OUTPUT"
           echo "chart_version=$CHART_VERSION" >> "$GITHUB_OUTPUT"
+        env:
+          VERSION: ${{ steps.version.outputs.resolved_version }}
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
