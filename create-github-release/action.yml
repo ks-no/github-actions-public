@@ -1,4 +1,4 @@
-name: Create GitHub Release
+name: .NET GitHub Release
 description: Create GitHub release with version bump
 
 inputs:

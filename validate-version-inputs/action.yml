@@ -21,16 +21,24 @@ runs:
     - name: 'Validate version inputs'
       shell: bash
       run: |
-        VERSION="${{ inputs.version }}"
-        SEMVER_INCREMENT="${{ inputs.semver_increment }}"
-        IS_RELEASE="${{ inputs.is_release }}"
-
-        if [[ -n "$VERSION" && -n "$SEMVER_INCREMENT" ]]; then
+        if [[ -n "$VERSION" && -n "$SEMVER_INCREMENT" ]] ; then
           echo "::error::Both 'version' and 'semver_increment' are set. Please provide only one."
           exit 1
         fi
-
-        if [[ "$IS_RELEASE" == "true" && -z "$VERSION" && -z "$SEMVER_INCREMENT" ]]; then
+        if [[ "$IS_RELEASE" == "true" && -z "$VERSION" && -z "$SEMVER_INCREMENT" ]] ; then
           echo "::error::Release build requires either 'version' or 'semver_increment' to be set."
           exit 1
         fi
+        if [[ -n "$VERSION" && ! "$VERSION" =~ ^([0-9]|[1-9][0-9]+)\.([0-9]|[1-9][0-9]+)\.([0-9]|[1-9][0-9]+)$ ]] ; then
+          echo "::error::'version' must be in the format X.Y.Z where X, Y, and Z are non-negative integers."
+          exit 1
+        fi
+        if [[ -n "$SEMVER_INCREMENT" && ! "$SEMVER_INCREMENT" =~ ^next\ (major|minor|patch)$ ]] ; then
+          echo "::error::'semver_increment' must be one of 'next major', 'next minor', or 'next patch'."
+          exit 1
+        
+        fi
+      env:
+        VERSION: ${{ inputs.version }}
+        SEMVER_INCREMENT: ${{ inputs.semver_increment }}
+        IS_RELEASE: ${{ inputs.is_release }}
