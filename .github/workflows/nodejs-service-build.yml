@@ -34,7 +34,7 @@ on:
         type: boolean
         default: true
       is_release:
-        description: 'Is this a release?'
+        description: 'Whether to make a Github release'
         required: false
         type: boolean
         default: false
@@ -107,7 +107,7 @@ jobs:
       group: ${{ format('autobuild-{0}-{1}', github.repository, github.ref_name) }}
       cancel-in-progress: true
     outputs:
-      project_version: ${{ steps.version.outputs.version }}
+      project_version: ${{ steps.version.outputs.resolved_version }}
       image_tag: ${{ steps.tags.outputs.image_tag }}
       chart_version: ${{ steps.tags.outputs.chart_version }}
     steps:
@@ -142,7 +142,7 @@ jobs:
         id: tags
         shell: bash
         run: |
-          PROJECT_VERSION="${{ steps.version.outputs.version }}"
+          PROJECT_VERSION="${{ steps.version.outputs.resolved_version }}"
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
 
           IMAGE_TAG="${PROJECT_VERSION}-${SHORT_SHA}"
@@ -207,12 +207,30 @@ jobs:
           ks_github_app_id: ${{ inputs.ks_runner_app_id }}
           ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
 
+      - name: Generate release body and set action output
+        if: inputs.is_release == true && github.ref_name == 'main'
+        id: generate_body
+        uses: ks-no/github-actions-public/generate-release-notes@main
+        with:
+          github-token: ${{ steps.app_token.outputs.app_token }}
+          actor: ${{ github.actor }}
+
+      - name: Create GitHub Release
+        if: inputs.is_release == true && github.ref_name == 'main'
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 #v3.0.2
+        with:
+          tag_name: ${{ steps.version.outputs.resolved_version }}
+          name: "Release ${{ steps.version.outputs.resolved_version }}"
+          body: ${{ steps.generate_body.outputs.release_body }}
+          draft: false
+          prerelease: false
+
       - name: Workflow summary
         shell: bash
         run: |
           {
             echo "## Node.js Service Build Summary"
-            echo "- project_version: ${{ steps.version.outputs.version }}"
+            echo "- project_version: ${{ steps.version.outputs.resolved_version }}"
             echo "- image_tag: ${{ steps.tags.outputs.image_tag }}"
             echo "- chart_version: ${{ steps.tags.outputs.chart_version }}"
             echo "- deploy_enabled: ${{ inputs.autodeploy }}"
