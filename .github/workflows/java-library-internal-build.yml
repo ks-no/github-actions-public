@@ -63,6 +63,7 @@ jobs:
       cancel-in-progress: true
     steps:
       - name: 'Validate version inputs'
+        if: inputs.is_release == true
         uses: ks-no/github-actions-public/validate-version-inputs@main
         with:
           version: ${{ inputs.version }}
