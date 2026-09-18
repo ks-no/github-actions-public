@@ -18,6 +18,14 @@ on:
         required: false
         type: string
         default: ''
+      host:
+        description: 'The network address to reach this service from, if parameterized in values.yaml.'
+        required: false
+        type: string
+      tenant:
+        description: 'The ingress tenant on which the service lives, if parameterized in values.yaml.'
+        required: false
+        type: string
       docker_registry:
         description: 'Docker registry hostname.'
         required: false
@@ -192,6 +200,8 @@ jobs:
           chart_name: ${{ inputs.helm_chart }}
           chart_version: ${{ steps.tags.outputs.chart_version }}
           image_tag: ${{ steps.tags.outputs.image_tag }}
+          host: ${{ inputs.host }}
+          tenant: ${{ inputs.tenant }}
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           need_jfrog_setup: 'true'
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}

@@ -10,6 +10,12 @@ inputs:
   image_tag:
     description: 'The image tag to be set in values.yaml (replaces IMAGE_TAG).'
     required: true
+  host:
+    description: 'The network host address to be set in values.yaml (replaces NETWORK_HOST_HELM)'
+    required: false
+  tenant:
+    description: 'The ingress tenant to be set in values.yaml (replaces INGRESS_TENANT_HELM)'
+    required: false
   gpg_private_key:
     description: 'The GPG private key for signing the chart.'
     required: true
@@ -56,6 +62,8 @@ runs:
         CHART_VERSION: ${{ inputs.chart_version }}
         IMAGE_TAG: ${{ inputs.image_tag }}
         PROJECT_HELM_VERSION: ${{ inputs.project_helm_version || inputs.chart_version }}
+        NETWORK_HOST_HELM: ${{ inputs.host }}
+        INGRESS_TENANT_HELM: ${{ inputs.tenant }}
       run: |
         envsubst < ${{ inputs.helm_folder || inputs.chart_name }}/values.yaml > target/${{ inputs.chart_name }}/values.yaml
         envsubst < ${{ inputs.helm_folder || inputs.chart_name }}/Chart.yaml > target/${{ inputs.chart_name }}/Chart.yaml
