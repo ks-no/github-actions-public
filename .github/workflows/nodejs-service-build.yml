@@ -177,7 +177,7 @@ jobs:
         with:
           context: ${{ inputs.build_context }}
           file: ${{ inputs.dockerfile_path }}
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: |
             ${{ inputs.docker_registry }}/${{ steps.tags.outputs.app_name }}:${{ steps.tags.outputs.image_tag }}
             ${{ github.ref == 'refs/heads/main' && inputs.push_latest_on_main && format('{0}/{1}:latest', inputs.docker_registry, steps.tags.outputs.app_name) || '' }}
