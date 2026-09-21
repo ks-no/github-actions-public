@@ -91,18 +91,30 @@ jobs:
           java-version: ${{ steps.validate_java_version.outputs.java_version }}
           distribution: 'temurin'
 
-      # Egen cache-nøkkel (ikke delt med biblioteksbyggets "Cache Maven
-      # packages"-cache): denne workflowen laster ned et mye større sett
-      # artefakter (hele dependencyManagement) enn det biblioteksbygget
-      # faktisk trenger for eksempelmodulene. Deling ville tvunget
-      # biblioteksbygget til å restore en unødvendig stor cache.
+      # Eget lokalrepo, fysisk atskilt fra ~/.m2/repository (ikke bare egen
+      # cache-key): denne workflowen laster ned hele dependencyManagement
+      # (kan bli mange GB) - langt mer enn det et biblioteksbygg trenger for
+      # sine egne eksempelmoduler. To problemer må unngås samtidig:
+      # 1) restore-keys er ren streng-prefiks-matching hos GitHub - en
+      #    restore-keys-prefiks som "maven-" ville faktisk trigge på en key
+      #    som "maven-sbom-<hash>" siden det er en gyldig prefiks-match, og
+      #    kunne fått biblioteksbygg til å restore hele denne SBOM-cachen.
+      # 2) Selv med en garantert ikke-overlappende cache-key: på gjenbrukte
+      #    selvhostede runnere ekstraherer actions/cache INN i en
+      #    eksisterende mappe uten å tømme den først. Delte de samme
+      #    ~/.m2/repository, ville rester fra denne jobben ligge igjen på
+      #    disk og bli feid inn i et helt urelatert biblioteksbygg sin
+      #    cache-save rett etterpå, uavhengig av cache-key.
+      # Et helt eget path (pekt ut via maven.repo.local, se
+      # generate-dependency-management-sbom) løser begge på én gang: de to
+      # jobbtypene kan aldri dele - og dermed aldri forurense - samme mappe.
       - name: Cache Maven packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 #v6.1.0
         with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-sbom-${{ hashFiles('**/pom.xml') }}
+          path: ~/.m2-dependency-management-sbom/repository
+          key: ${{ runner.os }}-m2-depmgmt-sbom-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
-            ${{ runner.os }}-maven-sbom-
+            ${{ runner.os }}-m2-depmgmt-sbom-
 
       - name: Prepare JFrog CLI
         uses: ks-no/github-actions-public/prepare-the-frog@main
@@ -175,6 +187,7 @@ jobs:
           working_directory: ${{ inputs.working_directory }}
           sbom_group_id: ${{ inputs.sbom_group_id }}
           sbom_artifact_id: ${{ steps.artifact_id.outputs.artifact_id }}
+          maven_repo_local: ~/.m2-dependency-management-sbom/repository
 
       - name: SBOM Upload and Report
         uses: ks-no/github-actions-public/sbom-upload-and-report@main
