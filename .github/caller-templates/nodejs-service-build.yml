@@ -48,6 +48,6 @@ jobs:
       # build_context: '.'
       # Optional (copy-edit): disable publishing :latest on main.
       # push_latest_on_main: false
-      # Optional (copy-edit): override the GitHub App ID for the deploy action. 
+      # Optional (copy-edit): override the GitHub App ID for the deploy action.
       # By default it is read from the KS_RUNNER_APP_ID secret.
       # ks_runner_app_id: ${{ vars.KS_RUNNER_APP_ID }}
