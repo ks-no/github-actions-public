@@ -19,6 +19,7 @@ jobs:
       ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
       KS_RUNNER_PRIVATE_KEY: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+      KS_RUNNER_APP_ID: ${{ secrets.KS_RUNNER_APP_ID }}
     with:
       app_name: ''
       helm_chart: ''
@@ -47,5 +48,6 @@ jobs:
       # build_context: '.'
       # Optional (copy-edit): disable publishing :latest on main.
       # push_latest_on_main: false
-      # Optional (copy-edit): uncomment to pass GitHub App ID via repository variable for deploy action.
+      # Optional (copy-edit): override the GitHub App ID for the deploy action. 
+      # By default it is read from the KS_RUNNER_APP_ID secret.
       # ks_runner_app_id: ${{ vars.KS_RUNNER_APP_ID }}
