@@ -91,11 +91,6 @@ on:
         required: false
         type: string
         default: 'host'
-      ks_runner_app_id:
-        description: 'GitHub App ID used by deploy action. Falls back to the KS_RUNNER_APP_ID secret if not set.'
-        required: false
-        type: string
-        default: ''
     secrets:
       ARTIFACTORY_USERNAME:
         required: true
@@ -232,7 +227,7 @@ jobs:
           helm_chart: ${{ inputs.helm_chart }}
           environment: ${{ inputs.environment }}
           version: ${{ steps.tags.outputs.chart_version }}
-          ks_github_app_id: ${{ inputs.ks_runner_app_id || secrets.KS_RUNNER_APP_ID }}
+          ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
           ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
 
       - name: Update version in package.json
