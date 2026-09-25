@@ -70,6 +70,7 @@ jobs:
           fetch-tags: true
 
       - name: install xsltproc
+        if: inputs.is_public == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y xsltproc
