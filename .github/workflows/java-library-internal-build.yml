@@ -111,6 +111,18 @@ jobs:
         run: |
           echo "${{ secrets.ARTIFACTORY_PASSWORD }}" | docker login docker-all.artifactory.fiks.ks.no --username "${{ secrets.ARTIFACTORY_USERNAME }}" --password-stdin
 
+      # Runnerne gjenbrukes på tvers av helt ulike, urelaterte repoer.
+      # actions/cache sitt restore-steg ekstraherer INN i denne mappen uten å
+      # tømme den først - uten denne opprenskingen hoper innhold fra
+      # tidligere jobber (andre repoer!) seg opp her over tid, og blir feid
+      # med inn i DENNE jobbens cache-save. Bekreftet empirisk (delte
+      # EC2-runner-instanser på tvers av repoer, september 2026) som
+      # årsaken til at flere titalls repoer fikk unormalt store Maven-
+      # cacher. Sikrer at det som restores/lagres er nøyaktig det denne
+      # cache-nøkkelen selv eier.
+      - name: Rydd ~/.m2/repository før cache-restore
+        run: rm -rf ~/.m2/repository
+
       - name: Cache Maven packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 #v6.1.0
         with:
