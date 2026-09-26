@@ -38,6 +38,17 @@ inputs:
       f.eks. en super-pom lenger ned i et multi-modul-repo.
     required: false
     default: '.'
+  maven_repo_local:
+    description: >
+      Valgfri sti til et dedikert Maven lokalrepo (maven.repo.local), separat
+      fra det vanlige ~/.m2/repository. Denne workflowen laster ned hele
+      dependencyManagement (potensielt mange GB) - på gjenbrukte selvhostede
+      runnere vil et delt ~/.m2/repository lett forurense cachen til andre,
+      urelaterte bygg som lander på samme runner etterpå (actions/cache
+      ekstraherer inn i en eksisterende mappe uten å tømme den først). Tomt
+      betyr default (~/.m2/repository).
+    required: false
+    default: ''
 
 outputs:
   bom_file:
@@ -57,5 +68,6 @@ runs:
         OUTPUT_BOM_NAME: ${{ inputs.output_bom_name }}
         CYCLONEDX_PLUGIN_VERSION: ${{ inputs.cyclonedx_plugin_version }}
         WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        MAVEN_REPO_LOCAL: ${{ inputs.maven_repo_local }}
       run: |
         bash "${GITHUB_ACTION_PATH}/generate-sbom.sh"
