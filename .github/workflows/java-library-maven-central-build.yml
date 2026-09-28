@@ -354,7 +354,7 @@ jobs:
         if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
         shell: bash
         run: |
-          IFS='.' read -r major minor patch <<< "${{ inputs.version }}"
+          IFS='.' read -r major minor patch <<< "${{ steps.resolve_version.outputs.resolved_version }}"
           next_patch=$((patch + 1))
           next_snapshot_version="$major.$minor.$next_patch-SNAPSHOT"
           echo "Next snapshot version will be $next_snapshot_version"
