@@ -17,11 +17,23 @@ WORKING_DIRECTORY="${WORKING_DIRECTORY:-.}"
 
 cd "$WORKING_DIRECTORY"
 
+# Dedikert lokalrepo (om satt) holder denne jobbens massive nedlasting unna
+# ~/.m2/repository, slik at den aldri kan blande seg inn i cachen til andre
+# bygg som gjenbruker samme runner - se maven_repo_local i action.yml.
+MVN_LOCAL_REPO_ARGS=()
+if [[ -n "${MAVEN_REPO_LOCAL:-}" ]]; then
+  # Et innledende "~" ekspanderes ikke automatisk her (det skjer kun for et
+  # bokstavelig "~" i starten av et ord, ikke inni en variabel-verdi) - må
+  # gjøres eksplisitt, siden Maven ikke gjør shell-style tilde-ekspansjon selv.
+  MAVEN_REPO_LOCAL_EXPANDED="${MAVEN_REPO_LOCAL/#\~/$HOME}"
+  MVN_LOCAL_REPO_ARGS=(-Dmaven.repo.local="$MAVEN_REPO_LOCAL_EXPANDED")
+fi
+
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
 echo "==> Henter effective POM (flater ut importerte BOM-er)"
-$MVN -q -N help:effective-pom -Doutput="$WORKDIR/effective-pom.xml"
+$MVN -q -N help:effective-pom -Doutput="$WORKDIR/effective-pom.xml" "${MVN_LOCAL_REPO_ARGS[@]+"${MVN_LOCAL_REPO_ARGS[@]}"}"
 
 echo "==> Materialiserer dependencyManagement som ekte dependencies"
 xsltproc \
@@ -38,7 +50,8 @@ echo "==> Genererer CycloneDX SBOM (laster ned alle managed artefakter for hashi
 # target/bom.json + target/bom.xml; vi kopierer/omdøper resultatet selv i
 # stedet for å stole på property-overstyring som blir stille ignorert.
 $MVN -T 1C -f "$WORKDIR/pom.xml" \
-  "org.cyclonedx:cyclonedx-maven-plugin:${CYCLONEDX_PLUGIN_VERSION}:makeBom"
+  "org.cyclonedx:cyclonedx-maven-plugin:${CYCLONEDX_PLUGIN_VERSION}:makeBom" \
+  "${MVN_LOCAL_REPO_ARGS[@]+"${MVN_LOCAL_REPO_ARGS[@]}"}"
 
 mkdir -p target
 cp "$WORKDIR/target/bom.json" "target/${OUTPUT_BOM_NAME}.json"
