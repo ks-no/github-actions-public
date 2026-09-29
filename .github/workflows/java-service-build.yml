@@ -76,10 +76,10 @@ on:
         required: false
         default: ''
       maven_version:
-        description: 'Maven version to install for the build (e.g., 3.9.11). Leave empty to use the Maven installed on the runner.'
+        description: 'Maven version to install for the build. Set to empty to use the Maven installed on the runner.'
         required: false
         type: string
-        default: ''
+        default: '3.9.11'
 
 permissions:
   id-token: write
