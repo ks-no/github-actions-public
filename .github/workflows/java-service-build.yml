@@ -75,6 +75,11 @@ on:
         type: string
         required: false
         default: ''
+      maven_version:
+        description: 'Maven version to install for the build (e.g., 3.9.11). Leave empty to use the Maven installed on the runner.'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   id-token: write
@@ -138,6 +143,12 @@ jobs:
         with:
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+
+      - name: 'Set up Maven'
+        if: inputs.maven_version != ''
+        uses: stCarolas/setup-maven@12eb41b233df95d49b0c11fc1b5bc8312e5d4ce0  #Remove when: https://github.com/jfrog/build-info/issues/841 is resolved, resolves to version v5.1
+        with:
+          maven-version: ${{ inputs.maven_version }}
 
       - name: 'Prepare and Tag Release'
         if: inputs.is_release == true
