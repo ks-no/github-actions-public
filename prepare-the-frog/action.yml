@@ -8,6 +8,10 @@ inputs:
   artifactory_password:
     description: 'The password for Artifactory'
     required: true
+  use_maven_wrapper:
+    description: 'Set to true to make jfrog mvn use the Maven wrapper (mvnw) in the repository instead of the Maven installed on the runner.'
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -27,5 +31,11 @@ runs:
 
     - name: Configure JFrog Maven
       shell: bash
+      env:
+        USE_MAVEN_WRAPPER: ${{ inputs.use_maven_wrapper }}
       run: |
-        jfrog mvn-config --repo-deploy-releases maven-local-staging --repo-deploy-snapshots maven-local-staging --repo-resolve-releases maven-all --repo-resolve-snapshots maven-all
+        wrapper_args=()
+        if [ "$USE_MAVEN_WRAPPER" = "true" ]; then
+          wrapper_args+=(--use-wrapper)
+        fi
+        jfrog mvn-config --repo-deploy-releases maven-local-staging --repo-deploy-snapshots maven-local-staging --repo-resolve-releases maven-all --repo-resolve-snapshots maven-all "${wrapper_args[@]}"

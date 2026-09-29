@@ -75,6 +75,11 @@ on:
         type: string
         required: false
         default: ''
+      use_maven_wrapper:
+        description: 'Set to true to build with the Maven wrapper (mvnw) committed in the repository instead of the Maven installed on the runner.'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
@@ -138,6 +143,7 @@ jobs:
         with:
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+          use_maven_wrapper: ${{ inputs.use_maven_wrapper }}
 
       - name: 'Prepare and Tag Release'
         if: inputs.is_release == true
