@@ -1,0 +1,47 @@
+name: 'Generate Container Image SBOM'
+description: >
+  Genererer en CycloneDX SBOM for ett eller flere container-images (f.eks.
+  Jib-baseimages pinnet i en pom.xml) ved å skanne hvert image direkte mot
+  registry med Syft, og slå de resulterende BOM-ene sammen til ett enkelt
+  dokument med cyclonedx-cli. Dette gjør at alle images kan lastes opp som
+  ETT Dependency-Track-prosjekt uten at påfølgende opplastinger overskriver
+  hverandre (DT reconciler komponentlisten per opplasting).
+
+inputs:
+  image_refs:
+    description: >
+      Linjeseparert liste med image-referanser (helst med @sha256-digest),
+      f.eks. "gcr.io/distroless/java25-debian13:nonroot@sha256:...". Tomme
+      linjer ignoreres. Duplikater fjernes automatisk.
+    required: true
+  output_bom_name:
+    description: 'Filnavn (uten .json) for den sammenslåtte SBOM-en.'
+    required: false
+    default: 'container-images-bom'
+  syft_version:
+    description: 'Versjon av Syft. Ikke dependabot-sporet - oppdater manuelt ved behov.'
+    required: false
+    default: 'v1.52.0'
+  cyclonedx_cli_version:
+    description: 'Versjon av cyclonedx-cli. Ikke dependabot-sporet - oppdater manuelt ved behov.'
+    required: false
+    default: 'v0.33.1'
+
+outputs:
+  bom_file:
+    description: 'Absolutt sti til den sammenslåtte CycloneDX SBOM-filen (JSON).'
+    value: ${{ steps.generate.outputs.bom_file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Generate container image SBOM
+      id: generate
+      shell: bash
+      env:
+        IMAGE_REFS: ${{ inputs.image_refs }}
+        OUTPUT_BOM_NAME: ${{ inputs.output_bom_name }}
+        SYFT_VERSION: ${{ inputs.syft_version }}
+        CYCLONEDX_CLI_VERSION: ${{ inputs.cyclonedx_cli_version }}
+      run: |
+        bash "${GITHUB_ACTION_PATH}/generate-container-sbom.sh"

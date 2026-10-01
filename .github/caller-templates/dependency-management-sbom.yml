@@ -28,3 +28,9 @@ jobs:
       # sbom_group_id: 'no.ks.fiks.sbom'
       # sbom_artifact_id: 'my-repo-dependency-management-sbom'
       # is_public: true # true if this repository is public, false otherwise
+      # container_image_refs: | # one or more image refs (ideally @sha256-pinned); uploaded as a single merged project
+      #   gcr.io/distroless/java25-debian13:nonroot@sha256:...
+      #   gcr.io/distroless/java21-debian13:nonroot@sha256:...
+      # container_sbom_project_name: 'my-repo-container-images'
+      # syft_version: 'v1.52.0'
+      # cyclonedx_cli_version: 'v0.33.1'
