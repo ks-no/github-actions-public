@@ -46,6 +46,11 @@ on:
         description: 'Version to use for component tests. If not set, the version from the built POM will be used.'
         required: false
         type: string
+      maven_version:
+        description: 'Maven version to install for the build. Set to empty to use the Maven installed on the runner.'
+        required: false
+        type: string
+        default: '3.9.11'
 
     secrets:
       ARTIFACTORY_USERNAME:
@@ -136,6 +141,12 @@ jobs:
         with:
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+
+      - name: 'Set up Maven'
+        if: inputs.maven_version != ''
+        uses: stCarolas/setup-maven@12eb41b233df95d49b0c11fc1b5bc8312e5d4ce0  #Remove when: https://github.com/jfrog/build-info/issues/841 is resolved, resolves to version v5.1
+        with:
+          maven-version: ${{ inputs.maven_version }}
 
       # Runnerne gjenbrukes på tvers av helt ulike, urelaterte repoer.
       # actions/cache sitt restore-steg ekstraherer INN i denne mappen uten å
