@@ -102,6 +102,8 @@ on:
         required: true
       KS_RUNNER_APP_ID:
         required: false
+      DEPENDENCY_TRACK_API_KEY:
+        required: false
     outputs:
       project_version:
         description: 'The resolved project version.'
@@ -229,6 +231,22 @@ jobs:
           version: ${{ steps.tags.outputs.chart_version }}
           ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
           ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+
+      - name: Generate SBOM
+        if: github.ref_name == 'main'
+        continue-on-error: true
+        shell: bash
+        run: npx --yes @cyclonedx/cdxgen@11 -t js -o bom.json .
+
+      - name: SBOM Upload and Report
+        if: github.ref_name == 'main'
+        uses: ks-no/github-actions-public/sbom-upload-and-report@main
+        with:
+          dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+          is_release: ${{ inputs.is_release }}
+          project_version: ${{ inputs.is_release == true && 'release' || '' }}
+          artifactory_repository_name: ${{ github.event.repository.name }}
+          artifactory_artifact_version: ${{ steps.version.outputs.resolved_version }}
 
       - name: Update version in package.json
         if: inputs.is_release == true && github.ref_name == 'main'

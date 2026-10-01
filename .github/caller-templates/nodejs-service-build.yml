@@ -20,6 +20,7 @@ jobs:
       GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
       KS_RUNNER_PRIVATE_KEY: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
       KS_RUNNER_APP_ID: ${{ secrets.KS_RUNNER_APP_ID }}
+      DEPENDENCY_TRACK_API_KEY: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
     with:
       app_name: ''
       helm_chart: ''
