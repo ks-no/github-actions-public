@@ -41,6 +41,31 @@ on:
         required: false
         type: string
         default: ''
+      container_image_refs:
+        description: >
+          Linjeseparert liste med container-image-referanser (helst med
+          @sha256-digest) som skal SBOM-skannes med Syft og lastes opp som ETT
+          samlet Dependency-Track-prosjekt (uavhengig av antall images - flere
+          images slås sammen til én BOM før opplasting). Tom = steget hoppes
+          helt over.
+        required: false
+        type: string
+        default: ''
+      container_sbom_project_name:
+        description: 'DT-/Artifactory-prosjektnavn for container-image-SBOM-en. Default: "<repo>-container-images".'
+        required: false
+        type: string
+        default: ''
+      syft_version:
+        description: 'Versjon av Syft. Ikke dependabot-sporet - oppdater manuelt ved behov.'
+        required: false
+        type: string
+        default: 'v1.52.0'
+      cyclonedx_cli_version:
+        description: 'Versjon av cyclonedx-cli. Ikke dependabot-sporet - oppdater manuelt ved behov.'
+        required: false
+        type: string
+        default: 'v0.33.1'
       is_public:
         description: 'Is this repository public?'
         type: boolean
@@ -199,4 +224,49 @@ jobs:
           project_version: ${{ steps.release_status.outputs.project_version }}
           bom_file: ${{ steps.generate_sbom.outputs.bom_file }}
           artifactory_repository_name: ${{ steps.project_name.outputs.project_name }}
+          artifactory_artifact_version: ${{ steps.version.outputs.resolved_version }}
+
+      # Alt under her er opt-in (kun hvis container_image_refs er satt) og
+      # påvirker ikke eksisterende konsumenter av denne workflowen.
+
+      - name: Resolve effective container SBOM project name
+        id: container_project_name
+        if: inputs.container_image_refs != ''
+        shell: bash
+        env:
+          PROJECT_NAME_INPUT: ${{ inputs.container_sbom_project_name }}
+          DEFAULT_PROJECT_NAME: ${{ github.event.repository.name }}-container-images
+        run: |
+          set -euo pipefail
+          EFFECTIVE_PROJECT_NAME="$PROJECT_NAME_INPUT"
+          if [[ -z "$EFFECTIVE_PROJECT_NAME" ]]; then
+            EFFECTIVE_PROJECT_NAME="$DEFAULT_PROJECT_NAME"
+          fi
+          echo "project_name=$EFFECTIVE_PROJECT_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Generate container image SBOM
+        id: generate_container_sbom
+        if: inputs.container_image_refs != ''
+        uses: ks-no/github-actions-public/generate-container-image-sbom@main
+        with:
+          image_refs: ${{ inputs.container_image_refs }}
+          output_bom_name: container-images-bom
+          syft_version: ${{ inputs.syft_version }}
+          cyclonedx_cli_version: ${{ inputs.cyclonedx_cli_version }}
+
+      # Versjonering følger samme main/prod-standard som tjenestebygg og
+      # deploy-flyten: project_version sendes tom, så sbom-upload-and-report
+      # sin innebygde default slår inn (is_release -> "prod", ellers "main").
+      # fiks-parent-pom "deployes" aldri selv - det nærmeste vi kommer et
+      # reelt "deployet"-signal er at en tagget release er det nedstrøms
+      # tjenester faktisk bygger mot, mens main er ennå-ikke-released state.
+      - name: Container Image SBOM Upload and Report
+        if: inputs.container_image_refs != ''
+        uses: ks-no/github-actions-public/sbom-upload-and-report@main
+        with:
+          dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
+          is_release: ${{ steps.release_status.outputs.is_release }}
+          project_name: ${{ steps.container_project_name.outputs.project_name }}
+          bom_file: ${{ steps.generate_container_sbom.outputs.bom_file }}
+          artifactory_repository_name: ${{ steps.container_project_name.outputs.project_name }}
           artifactory_artifact_version: ${{ steps.version.outputs.resolved_version }}
