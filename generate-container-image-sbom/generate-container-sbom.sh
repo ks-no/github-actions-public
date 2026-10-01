@@ -38,13 +38,22 @@ fi
 echo "==> Skanner ${#REFS[@]} unike image(r):"
 printf '    - %s\n' "${REFS[@]}"
 
+# CycloneDX-spec-versjon pinnet eksplisitt til 1.5 (samme versjon
+# cyclonedx-maven-plugin allerede produserer i den fungerende Maven-SBOM-
+# flyten). Syft v1.52.0 outputter 1.7 som standard, og `cyclonedx merge`
+# skriver alltid ut i SIN EGEN versjon uavhengig av input - uten denne
+# pinningen endte alt opp som 1.7, som Dependency-Track-instansen ikke
+# forstår: opplastingen rapporterte suksess og prosjektet ble opprettet,
+# men den asynkrone BOM-prosesseringen fant 0 komponenter.
+CYCLONEDX_SPEC_VERSION="1.5"
+
 PARTIAL_FILES=()
 i=0
 for ref in "${REFS[@]}"; do
   i=$((i + 1))
   partial="$WORKDIR/partial-${i}.cdx.json"
   echo "==> [$i/${#REFS[@]}] syft scan ${ref}"
-  syft scan "registry:${ref}" -o "cyclonedx-json=${partial}"
+  syft scan "registry:${ref}" -o "cyclonedx-json@${CYCLONEDX_SPEC_VERSION}=${partial}"
   PARTIAL_FILES+=("$partial")
 done
 
@@ -59,7 +68,8 @@ else
   cyclonedx merge \
     --input-files "${PARTIAL_FILES[@]}" \
     --output-file "$MERGED_FILE" \
-    --output-format json
+    --output-format json \
+    --output-version "v${CYCLONEDX_SPEC_VERSION//./_}"
 fi
 
 # Flytt resultatet ut av $WORKDIR (som slettes av trap) til RUNNER_TEMP
