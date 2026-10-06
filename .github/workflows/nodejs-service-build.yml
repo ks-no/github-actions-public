@@ -133,12 +133,20 @@ jobs:
       image_tag: ${{ steps.tags.outputs.image_tag }}
       chart_version: ${{ steps.tags.outputs.chart_version }}
     steps:
+      - name: 'Set up GitHub App'
+        id: app_token
+        uses: ks-no/github-actions-public/setup-github-app@main
+        with:
+          ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
+          ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+
       - name: Checkout code
         uses: ks-no/github-actions-public/checkout@main
         with:
           submodules: 'false'
           fetch-depth: '0'
           fetch-tags: 'true'
+          token: ${{ steps.app_token.outputs.app_token }}
 
       - name: Zizmor Scan
         continue-on-error: true
