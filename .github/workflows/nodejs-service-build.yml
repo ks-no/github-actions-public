@@ -293,6 +293,7 @@ jobs:
           body: ${{ steps.generate_body.outputs.release_body }}
           draft: false
           prerelease: false
+          token: ${{ steps.app_token.outputs.app_token }}
 
       - name: Workflow summary
         shell: bash
