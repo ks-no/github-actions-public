@@ -137,7 +137,7 @@ jobs:
         uses: ks-no/github-actions-public/checkout@main
         with:
           submodules: 'false'
-          fetch-depth: '1'
+          fetch-depth: '0'
           fetch-tags: 'true'
 
       - name: Zizmor Scan
