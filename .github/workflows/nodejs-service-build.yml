@@ -138,7 +138,7 @@ jobs:
         with:
           submodules: 'false'
           fetch-depth: '1'
-          fetch-tags: 'false'
+          fetch-tags: 'true'
 
       - name: Zizmor Scan
         continue-on-error: true
