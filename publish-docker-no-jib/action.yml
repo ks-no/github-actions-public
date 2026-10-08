@@ -53,6 +53,16 @@ runs:
           --interactive=false \
           --overwrite
 
+    - name: Set JFrog build name
+      shell: bash
+      env:
+        BUILD_NAME_INPUT: ${{ inputs.build_name }}
+      run: |
+        if [[ -z "$BUILD_NAME_INPUT" || "$BUILD_NAME_INPUT" == .* ]]; then
+          BUILD_NAME_INPUT="${GITHUB_REPOSITORY#*/}"
+        fi
+        echo "JFROG_CLI_BUILD_NAME=$BUILD_NAME_INPUT" >> "$GITHUB_ENV"
+
     - name: Set Docker repository
       id: set_repo
       shell: bash
@@ -101,4 +111,4 @@ runs:
     - name: Publish build info
       shell: bash
       run: |
-        jfrog rt build-publish "$BUILD_NAME" "$GITHUB_RUN_NUMBER"
+        jfrog rt build-publish "$JFROG_CLI_BUILD_NAME" "$GITHUB_RUN_NUMBER"
