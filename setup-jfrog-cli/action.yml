@@ -26,3 +26,10 @@ runs:
         ARTIFACTORY_PASSWORD: ${{ inputs.artifactory_password }}
       run: |
         jfrog config add artifactory --url="https://artifactory.fiks.ks.no" --user="$ARTIFACTORY_USERNAME" --password="$ARTIFACTORY_PASSWORD" --interactive=false --overwrite
+
+    - name: Ensure valid JFrog build name
+      shell: bash
+      run: |
+         if [[ -z "$JFROG_CLI_BUILD_NAME" || "$JFROG_CLI_BUILD_NAME" == .* ]]; then
+         echo "JFROG_CLI_BUILD_NAME=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_ENV"
+         fi
