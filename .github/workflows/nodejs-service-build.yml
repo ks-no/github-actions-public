@@ -274,6 +274,7 @@ jobs:
         shell: bash
         run: |
           git commit -a -m "Prepare release ${{ steps.version.outputs.resolved_version }}"
+          git push
           COMMIT_MESSAGE=$(git log -1 --pretty=%B)
           EOF_MARKER=$(uuidgen)
           echo "commit_message<<$EOF_MARKER" >> $GITHUB_OUTPUT
