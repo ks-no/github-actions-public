@@ -203,7 +203,7 @@ jobs:
         run: |
           jfrog mvn -U -B -P snapshot validate
 
-      - name: Prepare release
+      - name: 'Release: Notes, commit, tag'
         id: prepare_release
         if: inputs.is_release == true && (github.ref_name == inputs.default_branch || startsWith(github.ref, 'refs/heads/master')) # TODO: Legg til input for repos som brukar "master"
         uses: ks-no/github-actions-public/prepare-and-tag-release@main
@@ -365,7 +365,7 @@ jobs:
           fi
           mvn -B -e $PROFILE -DskipTests -Dmaven.test.skip=true deploy
 
-      - name: Tag, set snapshot, release
+      - name: Github release, set and push snapshot
         if: inputs.is_release == true && (github.ref_name == inputs.default_branch  || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
         uses: ks-no/github-actions-public/publish-release-create-snapshot@main
         with:
