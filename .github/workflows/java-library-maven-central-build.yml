@@ -203,12 +203,17 @@ jobs:
         run: |
           jfrog mvn -U -B -P snapshot validate
 
-      - name: Release - Set new version and tag
+      - name: Prepare release
+        id: prepare_release
         if: inputs.is_release == true && (github.ref_name == inputs.default_branch || startsWith(github.ref, 'refs/heads/master')) # TODO: Legg til input for repos som brukar "master"
-        shell: bash
-        run: |
-          jfrog mvn versions:set -DnewVersion=${{ steps.resolve_version.outputs.resolved_version }} -DgenerateBackupPoms=false
-          git commit -am "Release ${{ steps.resolve_version.outputs.resolved_version }}"
+        uses: ks-no/github-actions-public/prepare-and-tag-release@main
+        with:
+          version: ${{ steps.resolve_version.outputs.resolved_version }}
+          java_version: ${{ inputs.java_version }}
+          ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
+          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
+          reviewer: ${{ inputs.reviewer }}
 
       - name: Release - Verify POM
         if: inputs.is_release == true && (github.ref_name == inputs.default_branch  || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
@@ -360,44 +365,15 @@ jobs:
           fi
           mvn -B -e $PROFILE -DskipTests -Dmaven.test.skip=true deploy
 
-      - name: Generate Release Notes
-        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
-        uses: ks-no/github-actions-public/generate-release-notes@main
-        id: generate_body
+      - name: Tag, set snapshot, release
+        if: inputs.is_release == true && (github.ref_name == inputs.default_branch  || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
+        uses: ks-no/github-actions-public/publish-release-create-snapshot@main
         with:
-          github-token: ${{ steps.app_token.outputs.app_token }}
-          actor: ${{ github.actor }}
-          reviewer: ${{ inputs.reviewer }}
-
-      - name: Release - Set next snapshot version
-        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
-        shell: bash
-        run: |
-          git tag -a ${{ steps.resolve_version.outputs.resolved_version }} -m "Release ${{ steps.resolve_version.outputs.resolved_version }}"
-          IFS='.' read -r major minor patch <<< "${{ steps.resolve_version.outputs.resolved_version }}"
-          next_patch=$((patch + 1))
-          next_snapshot_version="$major.$minor.$next_patch-SNAPSHOT"
-          echo "Next snapshot version will be $next_snapshot_version"
-          jfrog mvn versions:set -DnewVersion=$next_snapshot_version -DgenerateBackupPoms=false
-          git commit -am "Bump to next snapshot version"
-
-      - name: Create GitHub Release
-        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 #v3.0.3
-        env:
-          GITHUB_TOKEN: ${{ steps.app_token.outputs.app_token }}
-        with:
-          tag_name: ${{ steps.resolve_version.outputs.resolved_version }}
-          name: "Release ${{ steps.resolve_version.outputs.resolved_version }}"
-          body: ${{ steps.generate_body.outputs.release_body }}
-          draft: false
-          prerelease: false
-
-      - name: Push changes
-        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
-        shell: bash
-        run: |
-          git push --follow-tags
+          version: ${{ steps.resolve_version.outputs.resolved_version }}
+          release_body: ${{ steps.prepare_release.outputs.release_body }}
+          ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
+          artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
+          artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
 
       - name: 'SBOM Upload and Report'
         if: github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
@@ -408,4 +384,3 @@ jobs:
           project_version: ${{ inputs.is_release == true && 'release' || '' }}
           artifactory_repository_name: ${{ github.event.repository.name }}
           artifactory_artifact_version: ${{ steps.build_java.outputs.git_tag }}
-
