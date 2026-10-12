@@ -209,7 +209,6 @@ jobs:
         run: |
           jfrog mvn versions:set -DnewVersion=${{ steps.resolve_version.outputs.resolved_version }} -DgenerateBackupPoms=false
           git commit -am "Release ${{ steps.resolve_version.outputs.resolved_version }}"
-          git tag -a ${{ steps.resolve_version.outputs.resolved_version }} -m "Release ${{ steps.resolve_version.outputs.resolved_version }}"
 
       - name: Release - Verify POM
         if: inputs.is_release == true && (github.ref_name == inputs.default_branch  || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
@@ -361,17 +360,6 @@ jobs:
           fi
           mvn -B -e $PROFILE -DskipTests -Dmaven.test.skip=true deploy
 
-      - name: Release - Set next snapshot version
-        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
-        shell: bash
-        run: |
-          IFS='.' read -r major minor patch <<< "${{ steps.resolve_version.outputs.resolved_version }}"
-          next_patch=$((patch + 1))
-          next_snapshot_version="$major.$minor.$next_patch-SNAPSHOT"
-          echo "Next snapshot version will be $next_snapshot_version"
-          jfrog mvn versions:set -DnewVersion=$next_snapshot_version -DgenerateBackupPoms=false
-          git commit -am "Bump to next snapshot version"
-
       - name: Generate Release Notes
         if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
         uses: ks-no/github-actions-public/generate-release-notes@main
@@ -380,6 +368,18 @@ jobs:
           github-token: ${{ steps.app_token.outputs.app_token }}
           actor: ${{ github.actor }}
           reviewer: ${{ inputs.reviewer }}
+
+      - name: Release - Set next snapshot version
+        if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
+        shell: bash
+        run: |
+          git tag -a ${{ steps.resolve_version.outputs.resolved_version }} -m "Release ${{ steps.resolve_version.outputs.resolved_version }}"
+          IFS='.' read -r major minor patch <<< "${{ steps.resolve_version.outputs.resolved_version }}"
+          next_patch=$((patch + 1))
+          next_snapshot_version="$major.$minor.$next_patch-SNAPSHOT"
+          echo "Next snapshot version will be $next_snapshot_version"
+          jfrog mvn versions:set -DnewVersion=$next_snapshot_version -DgenerateBackupPoms=false
+          git commit -am "Bump to next snapshot version"
 
       - name: Create GitHub Release
         if: inputs.is_release == true && (github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master') # TODO: Legg til input for repos som brukar "master"
