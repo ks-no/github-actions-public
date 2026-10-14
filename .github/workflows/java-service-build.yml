@@ -179,18 +179,18 @@ jobs:
         uses: ks-no/github-actions-public/publish-helm@main
         with:
           chart_name: ${{ inputs.helm_chart }}
-          chart_version: ${{ steps.build_java.outputs.git_tag }}
-          image_tag: ${{ steps.build_java.outputs.git_tag }}
+          chart_version: ${{ steps.resolve_version.outputs.resolved_version }}
+          image_tag: ${{ steps.resolve_version.outputs.resolved_version }}
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           helm_folder: ${{ inputs.helm_folder || inputs.helm_chart }}
 
       - name: 'Build and Push Docker Image'
         uses: ks-no/github-actions-public/publish-docker@main
         with:
-          version: ${{ steps.build_java.outputs.git_tag }}
+          version: ${{ steps.resolve_version.outputs.resolved_version }}
           is_release: ${{ inputs.is_release }}
           image_name: ${{ github.event.repository.name }}
-          tags: ${{ steps.build_java.outputs.git_tag }}
+          tags: ${{ steps.resolve_version.outputs.resolved_version }}
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
           path: ${{ inputs.path }}
@@ -202,7 +202,7 @@ jobs:
         with:
           helm_chart: ${{ inputs.helm_chart }}
           environment: ${{ inputs.environment }}
-          version: ${{ steps.build_java.outputs.git_tag }}
+          version: ${{ steps.resolve_version.outputs.resolved_version }}
           ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
           ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
@@ -229,7 +229,7 @@ jobs:
       - name: 'Github Summary'
         uses: ks-no/github-actions-public/post-github-summary@main
         with:
-          git_tag: ${{ steps.build_java.outputs.git_tag }}
+          git_tag: ${{ steps.resolve_version.outputs.resolved_version }}
           helm_chart_url: ${{ steps.publish_helm.outputs.helm_chart_url }}
           helm_chart_prov_url: ${{ steps.publish_helm.outputs.helm_chart_prov_url }}
 
@@ -241,4 +241,4 @@ jobs:
           is_release: ${{ inputs.is_release }}
           project_version: ${{ inputs.is_release == true && 'release' || '' }}
           artifactory_repository_name: ${{ github.event.repository.name }}
-          artifactory_artifact_version: ${{ steps.build_java.outputs.git_tag }}
+          artifactory_artifact_version: ${{ steps.resolve_version.outputs.resolved_version }}

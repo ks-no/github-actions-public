@@ -383,4 +383,4 @@ jobs:
           is_release: ${{ inputs.is_release }}
           project_version: ${{ inputs.is_release == true && 'release' || '' }}
           artifactory_repository_name: ${{ github.event.repository.name }}
-          artifactory_artifact_version: ${{ steps.build_java.outputs.git_tag }}
+          artifactory_artifact_version: ${{ steps.resolve_version.outputs.resolved_version }}
