@@ -5,8 +5,8 @@ inputs:
     description: 'The release version to set (e.g., 1.2.3)'
     required: true
   java_version:
-    description: 'The Java version to use for setting the version (e.g., java17)'
-    required: true
+    description: 'The Java version to use for setting the version (e.g., java17). Set to empty string to skip Java setup at this step.'
+    required: false
     default: 'java21'
   ks_github_app_token:
     description: 'Token for checking out code and pushing changes'
@@ -32,6 +32,7 @@ runs:
   using: 'composite'
   steps:
     - name: Set up Java
+      if: inputs.java_version != ''
       shell: bash
       run: |
         JAVA_VERSION_CMD="${{ inputs.java_version }}"
