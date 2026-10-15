@@ -19,13 +19,8 @@ inputs:
     required: true
     default: 'false'
   version:
-    description: 'The release version to create (e.g., 1.2.3)'
+    description: 'The version to publish (e.g., 1.2.3 for release or 1.2.3-4-g5a6b7c8d for snapshot)'
     required: false
-
-outputs:
-  git_tag:
-    description: "The calculated Git tag"
-    value: ${{ steps.build_vars.outputs.git_tag }}
 
 runs:
   using: "composite"
@@ -36,14 +31,9 @@ runs:
       id: build_vars
       shell: bash
       run: |
-        GIT_TAG=$(git describe --tags --abbrev=8 2>/dev/null || echo "0.0.0-$(git rev-list --count HEAD)-g$(git rev-parse --short=8 HEAD)")
-        if [ "${{ inputs.is_release }}" == "true" ]; then
-          GIT_TAG="${{ inputs.version }}"
-        fi
+        GIT_TAG="${{ inputs.version }}"
         BUILD_NAME="KS-${{ github.event.repository.name }}-${GIT_TAG}"
         echo "BUILD_NAME=$BUILD_NAME" >> $GITHUB_ENV
-        echo "GIT_TAG=$GIT_TAG" >> $GITHUB_ENV
-        echo "git_tag=$GIT_TAG" >> $GITHUB_OUTPUT
 
     - name: Switch Java Version
       shell: bash
