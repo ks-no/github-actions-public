@@ -86,6 +86,9 @@ This is also accomplished by filling in `big-runner: true` under a workflow disp
 
 ### open-api-specs
 
+Spec files in `specs_folder` can be JSON (`.json`) or YAML (`.yaml`, `.yml`). They are always bundled and published as
+JSON, so `foo.yaml` is published as `foo.json`. Two specs with the same name and different extensions make the workflow fail.
+
 Some spec files are placed in public repos. If this is the case, fill in `is_public: true` under a workflow dispatch to `open-api-specs`.
 
 ### Test-runners (for development only)

@@ -9,7 +9,7 @@ on:
         type: string
         default: 'specs'
       ignore_specs:
-        description: 'Comma-separated list of spec filenames (e.g. "foo.json,bar.json") to exclude from publishing to ks-no.github.io/static/api.'
+        description: 'Comma-separated list of published spec filenames (e.g. "foo.json,bar.json") to exclude from publishing to ks-no.github.io/static/api. Published specs are always .json, also when the source is YAML: write "foo.json" to ignore "foo.yaml".'
         required: false
         type: string
         default: ''
@@ -93,7 +93,34 @@ jobs:
       - name: Get spec files
         id: spec_files
         shell: bash
-        run: echo "files=$(ls ${{ inputs.specs_folder }}/*.json | tr '\n' ' ')" >> $GITHUB_OUTPUT
+        env:
+          SPECS_FOLDER: ${{ inputs.specs_folder }}
+        run: |
+          shopt -s nullglob
+          spec_files=("$SPECS_FOLDER"/*.{json,yaml,yml})
+
+          if [ "${#spec_files[@]}" -eq 0 ]; then
+            echo "::error::Fant ingen specs i '$SPECS_FOLDER'. Workflowen så etter filer med endelsene .json, .yaml og .yml. Sjekk inputen specs_folder."
+            exit 1
+          fi
+
+          declare -A source_by_name=()
+          collision=false
+          for file in "${spec_files[@]}"; do
+            filename=$(basename "$file")
+            name="${filename%.*}"
+            if [ -n "${source_by_name[$name]:-}" ]; then
+              echo "::error::'${source_by_name[$name]}' og '$file' blir begge publisert som '$name.json'. Gi en av filene et annet navn."
+              collision=true
+            else
+              source_by_name[$name]="$file"
+            fi
+          done
+          if [ "$collision" = true ]; then
+            exit 1
+          fi
+
+          echo "files=${spec_files[*]}" >> "$GITHUB_OUTPUT"
 
       - name: Lint specs
         shell: bash
@@ -111,7 +138,7 @@ jobs:
         run: |
           for file in ${{ steps.spec_files.outputs.files }}; do
             filename=$(basename "$file")
-            redocly bundle "$file" --ext json -o "builded-specs/$filename"
+            redocly bundle "$file" --ext json -o "builded-specs/${filename%.*}.json"
           done
 
       - name: Get bundled spec files
@@ -179,7 +206,7 @@ jobs:
           script: |
             const owner = 'ks-no';
             const repo = 'fiks-typescript-api-models';
-            const files = '${{ steps.bundled_files.outputs.files }}'.trim().split(/\s+/);
+            const files = '${{ steps.bundled_files.outputs.files }}'.trim().split(/\s+/).filter(Boolean);
 
             for (const file of files) {
               const specName = file.split('/').pop().replace('.json', '');
