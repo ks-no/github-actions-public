@@ -109,6 +109,16 @@ runs:
           fi
         fi
 
+        # Fallback: first @ks-no/<slug> on the catch-all line (teams without team- prefix)
+        if [[ -z "$TEAM_SLUG" && -n "$CATCHALL_LINE" ]]; then
+          TEAM_SLUG=$(echo "$CATCHALL_LINE" \
+            | grep -oE '@ks-no/[a-zA-Z0-9_-]+' \
+            | head -n1 || true)
+          if [[ -n "$TEAM_SLUG" ]]; then
+            echo "::debug::No team-* owner; using catch-all team: $TEAM_SLUG"
+          fi
+        fi
+
         # Log individual-user owners for diagnostics
         INDIVIDUAL_OWNERS=$(echo "$CODEOWNERS_CONTENT" | grep -oE '@[a-zA-Z0-9_-]+' \
           | grep -v '@ks-no/' || true)
@@ -117,12 +127,13 @@ runs:
         fi
 
         if [[ -z "$TEAM_SLUG" ]]; then
-          warn_and_exit "No @ks-no/team-* entry found in CODEOWNERS; skipping."
+          warn_and_exit "No @ks-no/<team> entry found in CODEOWNERS; skipping."
         fi
 
         # ── 3. Normalize tag name ─────────────────────────────────────
-        # Strip @ks-no/team- prefix, lowercase
-        SLUG="${TEAM_SLUG#@ks-no/team-}"
+        # Strip @ks-no/ and optional team- prefix, lowercase
+        SLUG="${TEAM_SLUG#@ks-no/}"
+        SLUG="${SLUG#team-}"
         TAG_NAME="team:${SLUG,,}"
 
         echo "Resolved team tag: $TAG_NAME (from $TEAM_SLUG)"
