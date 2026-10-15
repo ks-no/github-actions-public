@@ -209,7 +209,7 @@ jobs:
         uses: ks-no/github-actions-public/prepare-and-tag-release@main
         with:
           version: ${{ steps.resolve_version.outputs.resolved_version }}
-          java_version: ${{ inputs.java_version }}
+          java_version: ''
           ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
