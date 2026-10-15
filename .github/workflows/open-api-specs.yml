@@ -135,11 +135,8 @@ jobs:
 
       - name: Bundle specs
         shell: bash
-        env:
-          SPEC_FILES: ${{ steps.spec_files.outputs.files }}
         run: |
-          read -ra spec_files <<< "$SPEC_FILES"
-          for file in "${spec_files[@]}"; do
+          for file in ${{ steps.spec_files.outputs.files }}; do
             filename=$(basename "$file")
             redocly bundle "$file" --ext json -o "builded-specs/${filename%.*}.json"
           done
@@ -204,14 +201,12 @@ jobs:
       - name: Trigger TypeScript model generation
         if: github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 #v9.0.0
-        env:
-          BUNDLED_FILES: ${{ steps.bundled_files.outputs.files }}
         with:
           github-token: ${{ steps.setup_github_app.outputs.app_token }}
           script: |
             const owner = 'ks-no';
             const repo = 'fiks-typescript-api-models';
-            const files = process.env.BUNDLED_FILES.trim().split(/\s+/).filter(Boolean);
+            const files = '${{ steps.bundled_files.outputs.files }}'.trim().split(/\s+/).filter(Boolean);
 
             for (const file of files) {
               const specName = file.split('/').pop().replace('.json', '');
