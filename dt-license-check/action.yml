@@ -83,7 +83,7 @@ runs:
           local f
           for f in "${PAGE_FILE:-}" "${DETAIL_FILE:-}" "${UNIQUE_LICENSES_FILE:-}" \
                    "${DT_LICENSES_FILE:-}" "${DT_LICENSES_HEADERS_FILE:-}" \
-                   "${NORMALIZED_FILE:-}" "${COMPONENTS_FILE:-}"; do
+                   "${NORMALIZED_FILE:-}" "${COMPONENTS_FILE:-}" "${LICENSE_INFO_MAP_FILE:-}"; do
             if [[ -n "$f" ]]; then rm -f "$f"; fi
           done
           if [[ -n "${COMPONENTS_FILE:-}" ]]; then
@@ -275,11 +275,16 @@ runs:
         fi
         rm -f "$DT_LICENSES_FILE" "$DT_LICENSES_HEADERS_FILE"
 
-        # Normalize components with DT-sourced license categories
-        jq -L "$GITHUB_ACTION_PATH" --argjson licenseInfoMap "$LICENSE_INFO_MAP" '
+        # Normalize components with DT-sourced license categories.
+        # The license map goes to jq through a file: as one command-line argument,
+        # a large license catalogue exceeds the kernel limit ("Argument list too long").
+        LICENSE_INFO_MAP_FILE=$(mktemp)
+        printf '%s' "$LICENSE_INFO_MAP" > "$LICENSE_INFO_MAP_FILE"
+        jq -L "$GITHUB_ACTION_PATH" --slurpfile licenseInfoMaps "$LICENSE_INFO_MAP_FILE" '
           include "license-rules";
 
-          def get_category($licenseId):
+          ($licenseInfoMaps[0] // {}) as $licenseInfoMap
+          | def get_category($licenseId):
             if ($licenseInfoMap | has($licenseId)) and (($licenseInfoMap[$licenseId].category // "") != "") then
               $licenseInfoMap[$licenseId].category
             else
