@@ -31,6 +31,8 @@ check "CC-BY-NC is non-commercial"           "Non-Commercial" '"CC-BY-NC-4.0" | 
 check "LicenseRef id is unknown"             "Unknown"        '"LicenseRef-Proprietary-Limited" | guess_category'
 check "LicenseRef naming MIT is unknown"     "Unknown"        '"LicenseRef-MIT-Modified" | guess_category'
 check "LicenseRef naming GPL stays copyleft" "Copyleft"       '"LicenseRef-GPL-2.0-custom" | guess_category'
+check "LicenseRef in an expression is unknown" "Unknown"      '"MIT AND LicenseRef-Proprietary-1.0" | guess_category'
+check "GPL with a LicenseRef stays copyleft" "Copyleft"       '"GPL-2.0-only AND LicenseRef-Custom" | guess_category'
 check "mit inside a word is not MIT"         "Unknown"        '"Proprietary-Limited-1.0" | guess_category'
 check "isc inside a word is not ISC"         "Unknown"        '"Discretionary-Use-1.0" | guess_category'
 check "unknown id"                           "Unknown"        '"Foo-1.0" | guess_category'

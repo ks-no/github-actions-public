@@ -18,12 +18,13 @@ def group_category($groups):
 # - "agpl|(^|[^l])gpl" finds GPL but not the "gpl" inside "lgpl", so
 #   "GPL-2.0-or-later AND LGPL-2.1-or-later" stays Copyleft.
 # - Other LicenseRef- ids are custom licenses: Unknown, so they get checked.
+#   This also holds inside an expression: "MIT AND LicenseRef-X" is Unknown.
 # - Permissive names count only as whole words ("Limited" does not contain MIT).
 def guess_category:
   ascii_downcase as $v
   | if ($v | test("non-?commercial|by-?nc")) then "Non-Commercial"
     elif ($v | test("agpl|(^|[^l])gpl")) then "Copyleft"
-    elif ($v | startswith("licenseref-")) then "Unknown"
+    elif ($v | test("(^|[^a-z0-9])licenseref-")) then "Unknown"
     elif ($v | test("lgpl|epl|mpl|cddl")) then "Weak Copyleft"
     elif ($v | test("(^|[^a-z0-9])(apache|mit|bsd|isc|cc0|unlicense|public.?domain|boost|zlib|wtfpl|0bsd)([^a-z0-9]|$)")) then "Permissive"
     else "Unknown"
