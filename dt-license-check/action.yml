@@ -176,8 +176,10 @@ runs:
         DT_LICENSES_FILE=$(mktemp)
         DT_LICENSES_HEADERS_FILE=$(mktemp)
         LICENSE_PAGE_SIZE=1000
+        # The catalogue holds every license text, so it can be large: allow 60 s.
+        # If it times out, DT's license groups are lost and the regex fallback is used.
         LICENSES_HTTP=$(curl -sS -D "$DT_LICENSES_HEADERS_FILE" -o "$DT_LICENSES_FILE" -w '%{http_code}' \
-          --connect-timeout 10 --max-time 30 \
+          --connect-timeout 10 --max-time 60 \
           -H "X-Api-Key: $DT_API_KEY" \
           "$DT_BASE_URL/api/v1/license?pageSize=$LICENSE_PAGE_SIZE&sortName=licenseId&sortOrder=asc") || true
         
