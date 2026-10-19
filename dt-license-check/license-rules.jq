@@ -1,6 +1,5 @@
 # License rules shared by the jq programs in dt-license-check/action.yml.
 # Load with: jq -L "$GITHUB_ACTION_PATH" 'include "license-rules"; ...'
-# Tests: bash dt-license-check/test/license-rules.test.sh
 
 # Category from a license's DT license groups. The most restrictive group wins:
 # Non-Commercial, then Copyleft, then any custom group (these rules do not know
