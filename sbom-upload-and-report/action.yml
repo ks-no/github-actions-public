@@ -238,7 +238,9 @@ runs:
           fi
         else
           echo "::warning::SBOM upload to Dependency-Track returned HTTP $HTTP_CODE"
-          cat "$RESPONSE_FILE" 2>/dev/null || true
+          # Show the body as one JSON string, so no line of it can start with "::" and be
+          # read as a workflow command (the runner ignores leading spaces).
+          if [[ -s "$RESPONSE_FILE" ]]; then head -c 2000 "$RESPONSE_FILE" | jq -Rs . || true; fi
         fi
         rm -f "$RESPONSE_FILE"
 
