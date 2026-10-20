@@ -193,6 +193,7 @@ jobs:
         with:
           dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
           is_release: ${{ inputs.is-release }}
+          project_version: ${{ inputs.is-release == true && 'release' || 'main' }}
           artifactory_repository_name: ${{ github.event.repository.name }}
           artifactory_artifact_version: ${{ needs.initialize.outputs.full-version }}
 

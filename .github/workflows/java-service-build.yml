@@ -166,7 +166,6 @@ jobs:
         uses: ks-no/github-actions-public/build-java-and-test@main
         with:
           java_version: ${{ inputs.java_version }}
-          # DT upload is handled by deploy workflow
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
           ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
@@ -239,6 +238,8 @@ jobs:
         with:
           dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
           is_release: ${{ inputs.is_release }}
+          # Release-bygg lastes opp som "release". Når en prod-deploy laster opp "prod",
+          # settes "release" inaktiv av sbom-upload-and-report.
           project_version: ${{ inputs.is_release == true && 'release' || '' }}
           artifactory_repository_name: ${{ github.event.repository.name }}
           artifactory_artifact_version: ${{ steps.resolve_version.outputs.resolved_version }}

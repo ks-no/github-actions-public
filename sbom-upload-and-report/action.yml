@@ -18,7 +18,7 @@ inputs:
     required: false
     default: ${{ github.event.repository.name }}
   project_version:
-    description: 'Optional explicit Dependency-Track project version override (e.g. main or prod).'
+    description: 'Dependency-Track project version: main, release or prod. Libraries and release builds of services use release; deployed services get prod from the deploy action. A successful prod upload makes the release version inactive. If empty: prod for release builds (legacy default), otherwise main.'
     required: false
     default: ''
   bom_file:
@@ -40,7 +40,7 @@ inputs:
     required: false
     default: ''
   defer_dependency_track:
-    description: 'Skip DT upload (deferred to deploy phase). BOM is still stored in Artifactory.'
+    description: 'Deprecated; no shared workflow uses it. Skips the DT upload (the BOM is still stored in Artifactory).'
     required: false
     default: 'false'
 
@@ -273,26 +273,51 @@ runs:
         project_uuid: ${{ steps.sbom_upload.outputs.project_uuid }}
         bom_upload_token: ${{ steps.sbom_upload.outputs.bom_token }}
 
-    - name: Deactivate release project in DT
-      if: inputs.is_release == 'true' && inputs.dependency_track_api_key != '' && inputs.defer_dependency_track != 'true' && steps.sbom_upload.outputs.project_version == 'release' && steps.sbom_upload.outputs.project_uuid != ''
+    - name: Deactivate release version after prod upload
+      id: deactivate_release
+      # A project that has a 'prod' version keeps its 'release' version inactive.
+      # Projects that never get 'prod' (libraries) keep 'release' active.
+      if: inputs.dependency_track_api_key != '' && inputs.defer_dependency_track != 'true' && steps.sbom_upload.outputs.project_version == 'prod' && steps.sbom_upload.outputs.project_uuid != ''
       shell: bash
       env:
         DT_API_KEY: ${{ inputs.dependency_track_api_key }}
-        DT_PROJECT_UUID: ${{ steps.sbom_upload.outputs.project_uuid }}
         DT_PROJECT_NAME: ${{ inputs.project_name }}
         DT_BASE_URL: "https://dt.fiks.dev.ks.no"
       run: |
         set -uo pipefail
 
+        RESPONSE_FILE=$(mktemp)
+        trap 'rm -f "$RESPONSE_FILE"' EXIT
+        ENCODED_NAME=$(jq -rn --arg v "$DT_PROJECT_NAME" '$v | @uri')
+
+        LOOKUP_CODE=$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
+          --connect-timeout 10 --max-time 30 \
+          -H "X-Api-Key: $DT_API_KEY" \
+          "$DT_BASE_URL/api/v1/project/lookup?name=$ENCODED_NAME&version=release") || true
+
+        if [[ "$LOOKUP_CODE" == "404" ]]; then
+          echo "DT project '$DT_PROJECT_NAME' has no 'release' version; nothing to deactivate."
+          exit 0
+        fi
+        RELEASE_UUID=$(jq -r '.uuid // empty' "$RESPONSE_FILE" 2>/dev/null || true)
+        if ! [[ "$LOOKUP_CODE" =~ ^2[0-9]{2}$ && "$RELEASE_UUID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+          echo "::warning::Could not look up the DT release version (HTTP $LOOKUP_CODE). Non-blocking."
+          exit 0
+        fi
+
         HTTP_CODE=$(curl -sS -o /dev/null -w '%{http_code}' \
+          --connect-timeout 10 --max-time 30 \
           -X PATCH \
           -H "X-Api-Key: $DT_API_KEY" \
           -H "Content-Type: application/json" \
-          -d "{\"active\": false}" \
-          "$DT_BASE_URL/api/v1/project/$DT_PROJECT_UUID") || true
+          -d '{"active": false}' \
+          "$DT_BASE_URL/api/v1/project/$RELEASE_UUID") || true
 
-        if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
-          echo "Deactivated DT project '$DT_PROJECT_NAME' version 'release'."
+        # DT answers 304 when nothing changed, i.e. the release version was already inactive.
+        if [[ "$HTTP_CODE" == "304" ]]; then
+          echo "DT project '$DT_PROJECT_NAME' version 'release' is already inactive."
+        elif [[ "$HTTP_CODE" =~ ^2[0-9]{2}$ ]]; then
+          echo "Deactivated DT project '$DT_PROJECT_NAME' version 'release' (it now has 'prod')."
         else
-          echo "::warning::Failed to deactivate DT release project (HTTP $HTTP_CODE). Non-blocking."          
+          echo "::warning::Failed to deactivate the DT release version (HTTP $HTTP_CODE). Non-blocking."
         fi
