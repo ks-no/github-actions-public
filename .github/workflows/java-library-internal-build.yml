@@ -75,6 +75,9 @@ jobs:
           semver_increment: ${{ inputs.semver_increment }}
           is_release: ${{ inputs.is_release }}
 
+      - name: Resolve publish policy
+        uses: ks-no/github-actions-public/resolve-publish-policy@main
+
       - name: 'Set up GitHub App'
         id: app_token
         uses: ks-no/github-actions-public/setup-github-app@main
@@ -258,6 +261,7 @@ jobs:
           git commit -am "Bump to next snapshot version"
 
       - name: Publish Build Info
+        if: env.PUBLISH_ARTIFACTS == 'true'
         env:
           JFROG_CLI_BUILD_NAME: ${{ github.repository }}
           JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
@@ -289,7 +293,7 @@ jobs:
           prerelease: false
 
       - name: Promote Snapshot Build
-        if: inputs.is_release == false && !startsWith(github.ref, 'refs/heads/dependabot')
+        if: inputs.is_release == false && env.PUBLISH_ARTIFACTS == 'true'
         env:
           JFROG_CLI_BUILD_NAME: ${{ github.repository }}
           JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}

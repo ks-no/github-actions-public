@@ -50,7 +50,7 @@ jobs:
       !cancelled() &&
       needs.build.result == 'success' &&
       (inputs.is-release == true || inputs.push-to-nuget-org == true) &&
-      !startsWith(github.ref, 'refs/heads/dependabot/')
+      needs.build.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       id-token: write

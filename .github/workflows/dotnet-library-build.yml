@@ -95,6 +95,9 @@ on:
       full-version:
         description: 'Full version (with prerelease suffix if any)'
         value: ${{ jobs.initialize.outputs.full-version }}
+      publish:
+        description: '"true" hvis bygget skal publisere artefakter (false på dependabot-brancher)'
+        value: ${{ jobs.initialize.outputs.publish }}
 
 permissions:
   contents: write
@@ -116,7 +119,12 @@ jobs:
       next-version: ${{ steps.version.outputs.next-version }}
       full-version: ${{ steps.version.outputs.full-version }}
       build-opts: ${{ steps.version.outputs.build-opts }}
+      publish: ${{ steps.publish_policy.outputs.publish }}
     steps:
+      - name: Resolve publish policy
+        id: publish_policy
+        uses: ks-no/github-actions-public/resolve-publish-policy@main
+
       - uses: ks-no/github-actions-public/checkout@main
 
       - name: Zizmor Scan
@@ -200,7 +208,10 @@ jobs:
       # tests can restore this exact candidate version BEFORE we spend a DigiCert
       # signature on release. Artifactory is the internal mirror; the signed artifact
       # is published to nuget.org only.
+      # Unntaket er dependabot-brancher: de kjører uansett ikke integrasjonstester
+      # (se integration-test-jobben), og ville bare spist opp snapshot-retention.
       - name: Push to Artifactory
+        if: needs.initialize.outputs.publish == 'true'
         uses: ks-no/github-actions-public/dotnet-push-to-artifactory@main
         with:
           artifactory-username: ${{ secrets.ARTIFACTORY_USERNAME }}
@@ -304,7 +315,7 @@ jobs:
       (needs.build-windows.result == 'success' || needs.build-windows.result == 'skipped') &&
       (needs.integration-test.result == 'success' || needs.integration-test.result == 'skipped') &&
       inputs.is-release == true &&
-      !startsWith(github.ref, 'refs/heads/dependabot/')
+      needs.initialize.outputs.publish == 'true'
     runs-on: windows-latest
     timeout-minutes: 30
     steps:

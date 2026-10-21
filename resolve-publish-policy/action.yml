@@ -1,0 +1,46 @@
+name: 'Resolve publish policy'
+description: >
+  Avgjør om bygget skal publisere artefakter (Maven, Docker, Helm, NuGet) til Artifactory.
+  Dependabot-brancher publiserer ikke: snapshot-repoene er konfigurert til å ta vare på bare
+  de N siste versjonene per artefakt, og en haug dependabot-PR-er mellom to main-bygg dytter
+  ut imaget som fortsatt kjører i clusteret. Noder som blir restartet får da ImagePullBackoff.
+  Tilsvarer `when { not { branch pattern: "^dependabot.*" } }` i fiks-buildlib.
+
+  Steget setter PUBLISH_ARTIFACTS i $GITHUB_ENV for resten av jobben, og returnerer samme verdi
+  som output `publish` for bruk på tvers av jobber (`needs.<job>.outputs...`).
+
+inputs:
+  publish_from_dependabot:
+    description: 'Sett til "true" for å publisere artefakter også fra dependabot-brancher.'
+    required: false
+    default: 'false'
+
+outputs:
+  publish:
+    description: '"true" dersom bygget skal publisere artefakter, ellers "false".'
+    value: ${{ steps.policy.outputs.publish }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve publish policy
+      id: policy
+      shell: bash
+      env:
+        # github.head_ref er bare satt på pull_request-event, og holder navnet på kildebranchen.
+        # På PR-bygg er github.ref "refs/pull/<n>/merge" og github.ref_name "<n>/merge", så de
+        # kan ikke brukes til å kjenne igjen dependabot-brancher. Caller-templatene bygger bare
+        # main på push, så dependabot kommer alltid inn via pull_request.
+        BRANCH_REF: ${{ github.head_ref || github.ref_name }}
+        ALLOW_DEPENDABOT: ${{ inputs.publish_from_dependabot }}
+      run: |
+        set -euo pipefail
+        publish=true
+        if [[ "$BRANCH_REF" == dependabot* && "$ALLOW_DEPENDABOT" != "true" ]]; then
+          publish=false
+        fi
+        echo "publish=$publish" >> "$GITHUB_OUTPUT"
+        echo "PUBLISH_ARTIFACTS=$publish" >> "$GITHUB_ENV"
+        if [[ "$publish" == "false" ]]; then
+          echo "::notice title=Publisering hoppet over::'$BRANCH_REF' er en dependabot-branch. Koden blir bygd og testet, men ingen artefakter blir publisert til Artifactory."
+        fi

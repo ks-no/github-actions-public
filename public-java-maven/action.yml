@@ -160,7 +160,9 @@ runs:
         jfrog rt build-promote $JFROG_CLI_BUILD_NAME $JFROG_CLI_BUILD_NUMBER
 
     - name: Promote Snapshot Build
-      if: inputs.is_release != 'true' && !startsWith(github.ref, 'refs/heads/dependabot')
+      # github.head_ref er kildebranchen på pull_request-event; github.ref er
+      # "refs/pull/<n>/merge" der, og matcher derfor aldri refs/heads/dependabot.
+      if: inputs.is_release != 'true' && !startsWith(github.head_ref || github.ref_name, 'dependabot')
       shell: bash
       env:
         JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
