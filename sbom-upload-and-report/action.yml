@@ -239,8 +239,9 @@ runs:
         else
           echo "::warning::SBOM upload to Dependency-Track returned HTTP $HTTP_CODE"
           # Show the body as one JSON string, so no line of it can start with "::" and be
-          # read as a workflow command (the runner ignores leading spaces).
-          if [[ -s "$RESPONSE_FILE" ]]; then head -c 2000 "$RESPONSE_FILE" | jq -Rs . || true; fi
+          # read as a workflow command (the runner ignores leading spaces). "#" is escaped
+          # too, because the runner reads the legacy form "##[command]" anywhere in a line.
+          if [[ -s "$RESPONSE_FILE" ]]; then head -c 2000 "$RESPONSE_FILE" | jq -Rs . | sed 's/#/\\u0023/g' || true; fi
         fi
         rm -f "$RESPONSE_FILE"
 
