@@ -29,14 +29,16 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Create and push tag
+    # Taggen opprettes bare lokalt her. Den pushes sammen med versjonsbumpen i samme
+    # atomiske push nedenfor: en tag-push for seg selv etterlater taggen på en commit
+    # som ikke er nåbar fra branchen dersom den påfølgende branch-pushen avvises.
+    - name: Create tag
       shell: bash
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         VERSION="${{ inputs.current-version }}"
         git tag -a "${VERSION}" -m "Release version ${VERSION}"
-        git push origin "${VERSION}"
 
     - name: Update version in project files
       shell: bash
@@ -48,7 +50,7 @@ runs:
           sed -i "s/<VersionPrefix>.*<\/VersionPrefix>/<VersionPrefix>${NEXT_VERSION}<\/VersionPrefix>/" "$file"
         done
 
-    - name: Commit and push version bump
+    - name: Commit and push version bump and tag
       shell: bash
       run: |
         NEXT_VERSION="${{ inputs.next-version }}"
@@ -56,7 +58,9 @@ runs:
         git config user.email "github-actions[bot]@users.noreply.github.com"
         git add .
         git commit -m "Bump version to ${NEXT_VERSION} [skip ci]" || echo "No changes to commit"
-        git push origin HEAD:${{ inputs.ref-name }}
+        # --follow-tags tar med taggen fra steget over, --atomic gjør at branch og tag
+        # står og faller sammen hvis branchen har flyttet seg i mellomtiden.
+        git push --atomic --follow-tags origin HEAD:${{ inputs.ref-name }}
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 #v3.0.2

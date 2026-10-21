@@ -273,7 +273,9 @@ jobs:
           echo "Delaying promote to ensure all artifacts are available in Artifactory before promotion."
           sleep 15
           jfrog rt build-promote "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER" ks-maven
-          git push --follow-tags
+          # --atomic: uten den slipper taggen igjennom selv om branch-pushen avvises,
+          # og blir stående på en commit som ikke er nåbar fra main.
+          git push --atomic --follow-tags origin HEAD
 
 
       - name: Create GitHub Release
@@ -296,10 +298,13 @@ jobs:
         run: |
           jfrog rt build-promote "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER" ks-maven-snapshot
 
+      # Release-commit og tag er allerede pushet av 'Promote Release Build' over. Dette
+      # steget er i praksis en no-op ("Everything up-to-date") for release på default-
+      # branchen, men beholdes uendret her bortsett fra --atomic.
       - name: 'Prepare Release'
         if: inputs.is_release == true
         run: |
-          git push --follow-tags
+          git push --atomic --follow-tags origin HEAD
 
       - name: 'SBOM Upload and Report'
         if: github.ref_name == inputs.default_branch  || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
