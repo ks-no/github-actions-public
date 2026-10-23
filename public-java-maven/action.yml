@@ -204,4 +204,6 @@ runs:
       if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
       shell: bash
       run: |
-        git push --follow-tags
+        # --atomic: uten den slipper taggen igjennom selv om branch-pushen avvises,
+        # og blir stående på en commit som ikke er nåbar fra main.
+        git push --atomic --follow-tags origin HEAD

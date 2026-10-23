@@ -34,7 +34,11 @@ runs:
       shell: bash
       run: |
         git commit -am "Bump to next snapshot version"
-        git push --follow-tags
+        # --atomic er påkrevd: uten den behandler receive-pack hver ref for seg, og en
+        # push som avvises fordi main har flyttet seg (f.eks. en dependabot-merge midt i
+        # releasen) slipper likevel taggen igjennom. Da blir taggen stående på en commit
+        # som ikke er nåbar fra noen branch.
+        git push --atomic --follow-tags origin HEAD
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe #v2.6.1
