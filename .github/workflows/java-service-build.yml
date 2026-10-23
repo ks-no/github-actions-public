@@ -103,6 +103,9 @@ jobs:
           semver_increment: ${{ inputs.semver_increment }}
           is_release: ${{ inputs.is_release }}
 
+      - name: 'Resolve publish policy'
+        uses: ks-no/github-actions-public/resolve-publish-policy@main
+
       - name: 'Set up GitHub App'
         id: app_token
         uses: ks-no/github-actions-public/setup-github-app@main
@@ -174,7 +177,7 @@ jobs:
           version: ${{ steps.resolve_version.outputs.resolved_version }}
 
       - name: 'Build and Push Helm'
-        if: inputs.helm_chart != ''
+        if: inputs.helm_chart != '' && env.PUBLISH_ARTIFACTS == 'true'
         id: publish_helm
         uses: ks-no/github-actions-public/publish-helm@main
         with:
@@ -184,7 +187,10 @@ jobs:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           helm_folder: ${{ inputs.helm_folder || inputs.helm_chart }}
 
+      # Jib pusher rett til Artifactory; det finnes ikke noe "bygg uten å pushe" her, så
+      # hele steget hoppes over på dependabot-brancher.
       - name: 'Build and Push Docker Image'
+        if: env.PUBLISH_ARTIFACTS == 'true'
         uses: ks-no/github-actions-public/publish-docker@main
         with:
           version: ${{ steps.resolve_version.outputs.resolved_version }}
@@ -197,7 +203,7 @@ jobs:
           java_version: ${{ inputs.java_version }}
 
       - name: 'Deploy Application'
-        if: inputs.autodeploy == true && inputs.helm_chart != ''
+        if: inputs.autodeploy == true && inputs.helm_chart != '' && env.PUBLISH_ARTIFACTS == 'true'
         uses: ks-no/github-actions-public/deploy@main
         with:
           helm_chart: ${{ inputs.helm_chart }}

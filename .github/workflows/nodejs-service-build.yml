@@ -133,6 +133,9 @@ jobs:
       image_tag: ${{ steps.tags.outputs.image_tag }}
       chart_version: ${{ steps.tags.outputs.chart_version }}
     steps:
+      - name: Resolve publish policy
+        uses: ks-no/github-actions-public/resolve-publish-policy@main
+
       - name: 'Set up GitHub App'
         id: app_token
         uses: ks-no/github-actions-public/setup-github-app@main
@@ -206,21 +209,23 @@ jobs:
           username: ${{ secrets.ARTIFACTORY_USERNAME }}
           password: ${{ secrets.ARTIFACTORY_PASSWORD }}
 
+      # På dependabot-brancher bygges imaget fortsatt (slik at en ødelagt Dockerfile fanges
+      # opp), men verken imaget eller buildcache pushes til Artifactory.
       - name: Build Docker image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ inputs.build_context }}
           file: ${{ inputs.dockerfile_path }}
-          push: true
+          push: ${{ env.PUBLISH_ARTIFACTS == 'true' }}
           tags: |
             ${{ inputs.docker_registry }}/${{ steps.tags.outputs.app_name }}:${{ steps.tags.outputs.image_tag }}
             ${{ github.ref == 'refs/heads/main' && inputs.push_latest_on_main && format('{0}/{1}:latest', inputs.docker_registry, steps.tags.outputs.app_name) || '' }}
           cache-from: type=registry,ref=${{ inputs.docker_registry }}/${{ steps.tags.outputs.app_name }}:buildcache
-          cache-to: type=registry,ref=${{ inputs.docker_registry }}/${{ steps.tags.outputs.app_name }}:buildcache,mode=min,image-manifest=true
+          cache-to: ${{ env.PUBLISH_ARTIFACTS == 'true' && format('type=registry,ref={0}/{1}:buildcache,mode=min,image-manifest=true', inputs.docker_registry, steps.tags.outputs.app_name) || '' }}
           provenance: false
 
       - name: Publish Helm chart
-        if: inputs.helm_chart != ''
+        if: inputs.helm_chart != '' && env.PUBLISH_ARTIFACTS == 'true'
         uses: ks-no/github-actions-public/publish-helm@main
         with:
           chart_name: ${{ inputs.helm_chart }}
@@ -235,7 +240,7 @@ jobs:
           helm_folder: ${{ inputs.helm_folder || format('charts/{0}', inputs.helm_chart) }}
 
       - name: Deploy application
-        if: inputs.autodeploy == true && inputs.helm_chart != ''
+        if: inputs.autodeploy == true && inputs.helm_chart != '' && env.PUBLISH_ARTIFACTS == 'true'
         uses: ks-no/github-actions-public/deploy@main
         with:
           helm_chart: ${{ inputs.helm_chart }}

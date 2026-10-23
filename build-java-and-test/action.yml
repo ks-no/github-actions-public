@@ -110,18 +110,22 @@ runs:
         cd component-test
         jfrog docker compose down --volumes --remove-orphans
 
+    # PUBLISH_ARTIFACTS settes av resolve-publish-policy tidlig i jobben. Sjekken er
+    # "ikke false" slik at actionen publiserer som før når den brukes uten det steget.
     - name: Publish Maven Artifacts
+      if: env.PUBLISH_ARTIFACTS != 'false'
       shell: bash
       run: |
         jfrog mvn -B deploy -DskipTests --build-name=$BUILD_NAME --build-number=$GITHUB_RUN_NUMBER
 
     - name: Publish Build Info
+      if: env.PUBLISH_ARTIFACTS != 'false'
       shell: bash
       run: |
         jfrog rt build-publish $BUILD_NAME $GITHUB_RUN_NUMBER
 
     - name: Promote Release Build
-      if: ${{ inputs.is_release == 'true' }}
+      if: ${{ inputs.is_release == 'true' && env.PUBLISH_ARTIFACTS != 'false' }}
       shell: bash
       run: |
         jfrog rt build-promote $BUILD_NAME $GITHUB_RUN_NUMBER ks-maven

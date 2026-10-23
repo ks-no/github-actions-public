@@ -90,6 +90,9 @@ jobs:
           semver_increment: ${{ inputs.semver_increment }}
           is_release: ${{ inputs.is_release }}
 
+      - name: Resolve publish policy
+        uses: ks-no/github-actions-public/resolve-publish-policy@main
+
       - name: 'Set up GitHub App'
         id: app_token
         uses: ks-no/github-actions-public/setup-github-app@main
@@ -233,6 +236,7 @@ jobs:
           jfrog mvn -DdeployAtEnd=true -DskipPublishing=true -U -B clean org.cyclonedx:cyclonedx-maven-plugin:2.7.9:makeAggregateBom deploy
 
       - name: Publish Build info
+        if: env.PUBLISH_ARTIFACTS == 'true'
         shell: bash
         env:
           JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}
@@ -339,7 +343,7 @@ jobs:
           jfrog rt build-promote "$JFROG_CLI_BUILD_NAME" "$JFROG_CLI_BUILD_NUMBER" ks-maven
 
       - name: Promote Snapshot Build
-        if: inputs.is_release != true && !startsWith(github.ref, 'refs/heads/dependabot')
+        if: inputs.is_release != true && env.PUBLISH_ARTIFACTS == 'true'
         shell: bash
         env:
           JFROG_CLI_BUILD_NAME: ${{ github.event.repository.name }}

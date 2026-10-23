@@ -56,6 +56,31 @@ These wrappers are:
 
 More may be added in the future.
 
+### Publish policy (`resolve-publish-policy`)
+
+Snapshot repositories in Artifactory only keep the last few versions of each artifact. When a service
+accumulates many Dependabot PRs between two `main` builds, those builds push out the image that is still
+running in the cluster, and nodes that restart end up in `ImagePullBackoff`. This mirrors the
+`when { not { branch pattern: "^dependabot.*" } }` guard used throughout `fiks-buildlib`.
+
+Add the action as an early step in the job:
+
+```yaml
+- name: Resolve publish policy
+  id: publish_policy
+  uses: ks-no/github-actions-public/resolve-publish-policy@main
+```
+
+It exports `PUBLISH_ARTIFACTS` (`"true"`/`"false"`) to `$GITHUB_ENV` for the rest of the job, and exposes the
+same value as the step output `publish` for use across jobs via `needs.<job>.outputs`. Guard every step that
+writes to Artifactory with `if: env.PUBLISH_ARTIFACTS == 'true'`.
+
+Note that the branch is read from `github.head_ref`, falling back to `github.ref_name`. On `pull_request`
+events `github.ref` is `refs/pull/<n>/merge`, so matching against `refs/heads/dependabot/...` never fires —
+and since the caller templates only build `main` on `push`, Dependabot always arrives via `pull_request`.
+
+All reusable workflows in this repository use the action. Set `publish_from_dependabot: 'true'` to opt out.
+
 ### NuGet package signing (`dotnet-sign-nuget-packages`)
 
 Signs `.nupkg` files with a DigiCert KeyLocker code signing certificate and re-uploads them as a new artifact.

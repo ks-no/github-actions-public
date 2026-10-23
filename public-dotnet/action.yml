@@ -131,7 +131,9 @@ runs:
           fi
 
       - name: Push to NuGet.org
-        if: (github.ref_name == 'main' || github.ref_name == 'master' || inputs.push_to_nuget_org == 'true') && !startsWith(github.ref_name, 'dependabot')
+        # github.head_ref er kildebranchen på pull_request-event; github.ref_name er
+        # "<n>/merge" der, og kan derfor ikke brukes til å kjenne igjen dependabot alene.
+        if: (github.ref_name == 'main' || github.ref_name == 'master' || inputs.push_to_nuget_org == 'true') && !startsWith(github.head_ref || github.ref_name, 'dependabot')
         env:
           NUGET_API_KEY: ${{ inputs.nuget_api_key }}
         shell: bash
