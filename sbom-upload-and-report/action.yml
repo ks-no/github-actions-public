@@ -210,6 +210,7 @@ runs:
         RESPONSE_FILE="$RUNNER_TEMP/dt-bom-response.json"
 
         HTTP_CODE=$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
+          --connect-timeout 10 --max-time 120 \
           -X POST -H "X-Api-Key: $DT_API_KEY" \
           -F "projectName=$DT_PROJECT_NAME" \
           -F "projectVersion=$PROJECT_VERSION" \
@@ -217,45 +218,35 @@ runs:
           -F "bom=@$BOM_FILE" \
           "$DT_BASE_URL/api/v1/bom") || true
 
-        if ! [[ "$HTTP_CODE" =~ ^[0-9]{3}$ ]]; then
+        # curl reports 000 when no HTTP response arrived (connection error or timeout).
+        if [[ ! "$HTTP_CODE" =~ ^[1-5][0-9]{2}$ ]]; then
           echo "::warning::SBOM upload to Dependency-Track failed (no HTTP response)"
         elif [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
+          UUID_RE='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
           TOKEN=$(jq -r '.token // empty' "$RESPONSE_FILE" 2>/dev/null || true)
+          [[ "$TOKEN" =~ $UUID_RE ]] || TOKEN=""
           echo "bom_token=$TOKEN" >> "$GITHUB_OUTPUT"
 
-          # Look up project UUID for downstream steps (retry 3x, 2s delay)
-          if [[ -n "$TOKEN" ]]; then
-            ENCODED_NAME=$(jq -rn --arg v "$DT_PROJECT_NAME" '$v | @uri')
-            ENCODED_VERSION=$(jq -rn --arg v "$PROJECT_VERSION" '$v | @uri')
-            PROJECT_UUID=""
-            for attempt in 1 2 3; do
-              PROJECT_JSON=$(curl -fsS \
-                -H "X-Api-Key: $DT_API_KEY" \
-                "$DT_BASE_URL/api/v1/project/lookup?name=$ENCODED_NAME&version=$ENCODED_VERSION" 2>/dev/null) || true
-              PROJECT_UUID=$(echo "$PROJECT_JSON" | jq -r '.uuid // empty' 2>/dev/null || true)
-              if [[ -n "$PROJECT_UUID" ]]; then
-                break
-              fi
-              if [[ $attempt -lt 3 ]]; then
-                echo "::debug::Project UUID lookup attempt $attempt returned empty, retrying in 2s..."
-                sleep 2
-              fi
-            done
-            if [[ -n "$PROJECT_UUID" ]]; then
-              echo "project_uuid=$PROJECT_UUID" >> "$GITHUB_OUTPUT"
-              echo "::debug::Resolved project UUID: $PROJECT_UUID"
-            else
-              echo "::warning::Could not resolve DT project UUID after 3 attempts"
-            fi
+          # DT 5 returns the project UUID with the upload, so no lookup is needed.
+          # The tag, summary and deactivate steps run only when it is set.
+          PROJECT_UUID=$(jq -r '.projectUuid // empty' "$RESPONSE_FILE" 2>/dev/null || true)
+          if [[ "$PROJECT_UUID" =~ $UUID_RE ]]; then
+            echo "project_uuid=$PROJECT_UUID" >> "$GITHUB_OUTPUT"
+            echo "::debug::DT project UUID: $PROJECT_UUID"
+          else
+            echo "::warning::SBOM upload: Dependency-Track did not return a project UUID; team tagging and the vulnerability summary are skipped."
           fi
         else
           echo "::warning::SBOM upload to Dependency-Track returned HTTP $HTTP_CODE"
-          cat "$RESPONSE_FILE" 2>/dev/null || true
+          # Show the body as one JSON string, so no line of it can start with "::" and be
+          # read as a workflow command (the runner ignores leading spaces). "#" is escaped
+          # too, because the runner reads the legacy form "##[command]" anywhere in a line.
+          if [[ -s "$RESPONSE_FILE" ]]; then head -c 2000 "$RESPONSE_FILE" | jq -Rs . | sed 's/#/\\u0023/g' || true; fi
         fi
         rm -f "$RESPONSE_FILE"
 
     - name: Tag DT project with owning team
-      if: inputs.dependency_track_api_key != '' && inputs.defer_dependency_track != 'true'
+      if: inputs.dependency_track_api_key != '' && inputs.defer_dependency_track != 'true' && steps.sbom_upload.outputs.project_uuid != ''
       uses: ks-no/github-actions-public/tag-dt-project-by-team@main
       with:
         dependency_track_api_key: ${{ inputs.dependency_track_api_key }}
@@ -264,7 +255,7 @@ runs:
         project_uuid: ${{ steps.sbom_upload.outputs.project_uuid }}
 
     - name: DT vulnerability summary
-      if: inputs.dependency_track_api_key != '' && inputs.defer_dependency_track != 'true'
+      if: inputs.dependency_track_api_key != '' && inputs.defer_dependency_track != 'true' && steps.sbom_upload.outputs.project_uuid != ''
       uses: ks-no/github-actions-public/dt-vulnerability-summary@main
       with:
         dependency_track_api_key: ${{ inputs.dependency_track_api_key }}
