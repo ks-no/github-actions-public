@@ -47,6 +47,29 @@ printf '    - %s\n' "${REFS[@]}"
 # men den asynkrone BOM-prosesseringen fant 0 komponenter.
 CYCLONEDX_SPEC_VERSION="1.5"
 
+# Dropp pakker uten versjon i stedet for Syfts standard, som er å stubbe dem
+# med strengen "UNKNOWN". En versjonsløs komponent kan ikke matches mot et
+# CVE-versjonsintervall, så Dependency-Track faller tilbake til å matche kun på
+# produktnavn - og da treffer hele den historiske CVE-katalogen for produktet.
+#
+# Konkret eksempel: Grafana bygger binæren sin fra en VCS-utsjekk i stedet for
+# en publisert modulversjon, så Go skriver "(devel)" i build-infoen og Syft
+# normaliserer det til "UNKNOWN". Resultatet i DT var CVE-er fra 2018 og 2019
+# mot grafana:12.4.12, bekreftet mot NVD at de gjelder Grafana 2.x-6.x.
+#
+# Målt på docker.io/grafana/grafana:12.4.12: 32 av 1526 komponenter hadde purl
+# uten brukbar versjon. Med drop blir det 0, og de 926 filoppføringene er
+# urørt siden de ikke har purl og dermed ikke regnes som pakker.
+#
+# Merk: Syft dropper allerede navnløse pakker som standard (missing-name:
+# drop). Dette er samme prinsipp anvendt på versjon.
+#
+# Ikke bytt dette mot SYFT_GOLANG_MAIN_MODULE_VERSION_FROM_CONTENTS=true. Den
+# ser ut som den riktige fiksen, men gjetter: for grafana:12.4.12 utledet den
+# v3.53.3 fra en tilfeldig streng i binæren. En feil versjon er verre enn
+# ingen, fordi treffene da ser troverdige ut.
+export SYFT_COMPLIANCE_MISSING_VERSION=drop
+
 PARTIAL_FILES=()
 i=0
 for ref in "${REFS[@]}"; do
