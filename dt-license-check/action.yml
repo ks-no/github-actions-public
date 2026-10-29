@@ -83,7 +83,7 @@ runs:
           local f
           for f in "${PAGE_FILE:-}" "${DETAIL_FILE:-}" "${UNIQUE_LICENSES_FILE:-}" \
                    "${DT_LICENSES_FILE:-}" "${DT_LICENSES_HEADERS_FILE:-}" \
-                   "${NORMALIZED_FILE:-}" "${COMPONENTS_FILE:-}"; do
+                   "${NORMALIZED_FILE:-}" "${COMPONENTS_FILE:-}" "${LICENSE_INFO_MAP_FILE:-}"; do
             if [[ -n "$f" ]]; then rm -f "$f"; fi
           done
           if [[ -n "${COMPONENTS_FILE:-}" ]]; then
@@ -126,7 +126,7 @@ runs:
           fi
 
           HTTP_CODE=$(curl -sS -o "$PAGE_FILE" -w '%{http_code}' \
-            --connect-timeout 10 --max-time 60 \
+            --connect-timeout 10 --max-time 30 \
             -H "X-Api-Key: $DT_API_KEY" \
             "$COMPONENTS_URL") || true
 
@@ -176,6 +176,8 @@ runs:
         DT_LICENSES_FILE=$(mktemp)
         DT_LICENSES_HEADERS_FILE=$(mktemp)
         LICENSE_PAGE_SIZE=1000
+        # The catalogue holds every license text, so it can be large: allow 60 s.
+        # If it times out, DT's license groups are lost and the regex fallback is used.
         LICENSES_HTTP=$(curl -sS -D "$DT_LICENSES_HEADERS_FILE" -o "$DT_LICENSES_FILE" -w '%{http_code}' \
           --connect-timeout 10 --max-time 60 \
           -H "X-Api-Key: $DT_API_KEY" \
@@ -189,11 +191,13 @@ runs:
           elif [[ "$LICENSE_COUNT" -eq "$LICENSE_PAGE_SIZE" ]]; then
             echo "::warning::DT license check: License catalog may be truncated at pageSize=${LICENSE_PAGE_SIZE}."
           fi
-          LICENSE_INFO_MAP=$(jq '
+          LICENSE_INFO_MAP=$(jq -L "$GITHUB_ACTION_PATH" '
+            include "license-rules";
+
             map({
               key: (.licenseId // ""),
               value: {
-                category: ((.licenseGroups[0].name // "") | tostring),
+                category: group_category(.licenseGroups),
                 name: ((.name // "") | tostring),
                 explanation: (
                   (.licenseText // .licenseComments // .standardLicenseHeader // "")
@@ -273,20 +277,20 @@ runs:
         fi
         rm -f "$DT_LICENSES_FILE" "$DT_LICENSES_HEADERS_FILE"
 
-        # Normalize components with DT-sourced license categories
-        jq --argjson licenseInfoMap "$LICENSE_INFO_MAP" '
-          def get_category($licenseId):
+        # Normalize components with DT-sourced license categories.
+        # The license map goes to jq through a file: as one command-line argument,
+        # a large license catalogue exceeds the kernel limit ("Argument list too long").
+        LICENSE_INFO_MAP_FILE=$(mktemp)
+        printf '%s' "$LICENSE_INFO_MAP" > "$LICENSE_INFO_MAP_FILE"
+        jq -L "$GITHUB_ACTION_PATH" --slurpfile licenseInfoMaps "$LICENSE_INFO_MAP_FILE" '
+          include "license-rules";
+
+          ($licenseInfoMaps[0] // {}) as $licenseInfoMap
+          | def get_category($licenseId):
             if ($licenseInfoMap | has($licenseId)) and (($licenseInfoMap[$licenseId].category // "") != "") then
               $licenseInfoMap[$licenseId].category
             else
-              # Fallback regex categorization for unmapped licenses
-              ($licenseId | ascii_downcase) as $v
-              | if ($v | test("non-?commercial|by-?nc")) then "Non-Commercial"
-                elif ($v | test("agpl|gpl")) then "Copyleft"
-                elif ($v | test("lgpl|epl|mpl|cddl")) then "Weak Copyleft"
-                elif ($v | test("apache|mit|bsd|isc|cc0|unlicense|public.?domain|boost|zlib|wtfpl|0bsd")) then "Permissive"
-                else "Unknown"
-                end
+              $licenseId | guess_category
             end;
 
           def get_explanation($licenseId; $category):
@@ -316,12 +320,14 @@ runs:
               version: ((.version // "UNKNOWN_VERSION") | tostring),
               license: $lic,
               category: $category,
-              explanation: get_explanation($lic; $category)
+              explanation: get_explanation($lic; $category),
+              instruction: instruction($category; $lic)
             }
           )
         ' "$COMPONENTS_FILE" > "$NORMALIZED_FILE"
 
         UNKNOWN_LICENSE_COUNT=$(jq '[.[] | select(.category == "Unknown")] | length' "$NORMALIZED_FILE")
+        REVIEW_LICENSE_COUNT=$(jq -L "$GITHUB_ACTION_PATH" 'include "license-rules"; [.[] | select(needs_review(.category))] | length' "$NORMALIZED_FILE")
 
         echo "total_components=$TOTAL_COMPONENTS" >> "$GITHUB_OUTPUT"
         echo "unknown_license_count=$UNKNOWN_LICENSE_COUNT" >> "$GITHUB_OUTPUT"
@@ -341,17 +347,9 @@ runs:
           jq -r '
             def clean_md: gsub("[<>|]"; "");
 
-            def instruction(category; license):
-              if (license == "UNKNOWN_LICENSE" or category == "Unknown") then "Verifiser at det ikke kreves vurdering av lisensen"
-              elif category == "Non-Commercial" then "Krever godkjenning av team sikkerhet"
-              elif category == "Copyleft" then "Krever gjennomgang og godkjenning av lisens før prodsetting"
-              elif category == "Weak Copyleft" then "Gjennomgå lisenser og vurder om tiltak er nødvendig"
-              else "Ingen tiltak nødvendig"
-              end;
-
             sort_by(.category, .license, .name)
             | group_by([.category, .license])
-            | map("| " + (.[0].category | clean_md) + " | " + (.[0].license | clean_md) + " | " + (length | tostring) + " | " + instruction(.[0].category; .[0].license) + " |")
+            | map("| " + (.[0].category | clean_md) + " | " + (.[0].license | clean_md) + " | " + (length | tostring) + " | " + .[0].instruction + " |")
             | .[]
           ' "$NORMALIZED_FILE"
           echo ""
@@ -366,14 +364,6 @@ runs:
         if [[ "$TOTAL_COMPONENTS" -le "$DETAIL_LIMIT" ]]; then
           jq -r --arg dtBaseUrl "$DT_BASE_URL" '
             def clean_md: gsub("[<>|]"; "");
-
-            def instruction(category; license):
-              if (license == "UNKNOWN_LICENSE" or category == "Unknown") then "Must be classified in Dependency-Track"
-              elif category == "Non-Commercial" then "Approval required"
-              elif category == "Copyleft" then "Escalate and review before release"
-              elif category == "Weak Copyleft" then "Review obligations"
-              else "No action needed"
-              end;
 
             def full_text_link(baseUrl; license):
               if (license == "UNKNOWN_LICENSE") then ""
@@ -391,7 +381,7 @@ runs:
               + "License explanation: " + (.[0].explanation | clean_md) + "\n\n"
               + full_text_link($dtBaseUrl; .[0].license)
               + (map("- " + (.name | clean_md) + " (" + (.version | clean_md) + ")") | unique | join("\n"))
-              + "\n\nInstruction: " + instruction(.[0].category; .[0].license) + "\n\n</details>\n"
+              + "\n\nInstruction: " + .[0].instruction + "\n\n</details>\n"
           ' "$NORMALIZED_FILE" >> "$GITHUB_STEP_SUMMARY"
         else
           {
@@ -404,4 +394,10 @@ runs:
         if [[ "$UNKNOWN_LICENSE_COUNT" -gt 0 ]]; then
           SAFE_PROJECT_NAME=$(escape_workflow_value "$DT_PROJECT_NAME")
           echo "::warning::DT license check: ${UNKNOWN_LICENSE_COUNT} component(s) have unknown licenses in ${SAFE_PROJECT_NAME}"
+        fi
+
+        # Non-Commercial, Copyleft and custom DT license groups need approval or review.
+        if [[ "$REVIEW_LICENSE_COUNT" -gt 0 ]]; then
+          SAFE_PROJECT_NAME=$(escape_workflow_value "$DT_PROJECT_NAME")
+          echo "::warning::DT license check: ${REVIEW_LICENSE_COUNT} component(s) need license approval or review in ${SAFE_PROJECT_NAME}"
         fi
