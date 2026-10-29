@@ -1,8 +1,7 @@
 name: Docker image build and deploy
 description: >
-  Reusable workflow for Docker image-based projects;
-  builds image, uploads to Artifactory, and handles auto-deploy
-  and release.
+  Reusable workflow for Docker image-based projects; builds image, uploads to Artifactory,
+  generates and uploads SBOM and Helm chart, and handles auto-deploy and release.
 
 on:
   workflow_call:
@@ -11,10 +10,27 @@ on:
         description: 'Name of the project (used for Docker image name and JFrog build name)'
         required: true
         type: string
+      helm_chart:
+        description: 'Name of Helm chart; fallback to project_name if not provided'
+        required: false
+        type: string
+      helm_folder:
+        description: 'Folder where Helm chart is located; fallback to helm_chart if not provided'
+        required: false
+        type: string
       dockerfile:
         description: 'Path to Dockerfile (defaults to "./Dockerfile")'
         required: false
         default: './Dockerfile'
+        type: string
+      autodeploy:
+        description: 'Whether to deploy on successful build'
+        required: true
+        type: boolean
+      autodeploy_environment:
+        description: 'Which environment to autodeploy to (default: dev)'
+        required: false
+        default: 'dev'
         type: string
       is_release:
         description: 'true for release, false for snapshot'
@@ -39,6 +55,8 @@ on:
         required: true
       DEPENDENCY_TRACK_API_KEY:
         required: true
+      GPG_PRIVATE_KEY:
+        required: true
 
 jobs:
   build:
@@ -47,9 +65,11 @@ jobs:
       id-token: read
     runs-on: [self-hosted, x64]
     timeout-minutes: 20
+    env:
+      helm_chart: ${{ inputs.helm_chart || inputs.project_name }}
     steps:
       - name: 'Validate version inputs'
-        if: inputs.is_release == true
+        if: inputs.is_release
         uses: ks-no/github-actions-public/validate-version-inputs@main
         with:
           version: ${{ inputs.version }}
@@ -59,10 +79,7 @@ jobs:
       - name: Checkout code
         uses: ks-no/github-actions-public/checkout@main
         with:
-          submodules: true
           fetch-depth: 2
-          token: ${{ steps.app_token.outputs.app_token }}
-          fetch-tags: true
 
       - name: Resolve version
         uses: ks-no/github-actions-public/complete-version-resolvement@main
@@ -83,3 +100,32 @@ jobs:
           is_release: ${{ inputs.is_release }}
           build_name: ${{ inputs.project_name }}
           tags: ${{ steps.version.outputs.resolved_version }}
+
+      - name: Build and publish Helm chart
+        uses: ks-no/github-actions-public/publish-helm@main
+        with:
+          chart_name: ${{ env.helm_chart }}
+          helm_folder: ${{ inputs.helm_folder || env.helm_chart }}
+          chart_version: ${{ steps.version.outputs.resolved_version }}
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          image_tag: ${{ steps.version.outputs.resolved_version }}
+
+      - name: Deploy to environment
+        if: inputs.autodeploy
+        uses: ks-no/github-actions-public/deploy@main
+        with:
+          helm_chart: ${{ env.helm_chart }}
+          environment: ${{ inputs.autodeploy_environment }}
+          version: ${{ steps.version.outputs.resolved_version }}
+          ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
+          ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+
+      - name: 'Release: Add and push Git tag'
+        if: inputs.is_release
+        shell: bash
+        run: |
+            git tag -a "$VERSION" \
+              -m "Release version $VERSION"
+            git push --atomic --follow-tags origin
+        env:
+          VERSION: ${{ steps.version.outputs.resolved_version }}
