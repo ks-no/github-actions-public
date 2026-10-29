@@ -106,7 +106,7 @@ for self-hosted runners, the label is `[self-hosted, x64]`. In reusable workflow
 
 ### Large runners
 
-Some services may require more memory in order to be built. The label `x64-large` is used to request a large runner.
+Some services may require more memory in order to be built. The label `x64-large-memory` is used to request a large runner.
 This is also accomplished by filling in `big-runner: true` under a workflow dispatch to `java-service-build`.
 
 ### open-api-specs
