@@ -1,6 +1,5 @@
----
 name: 'Publish Docker Image without Jib'
-description: 'Build and push Docker image to Artifactory using JFrog CLI'
+description: 'Build Docker image, push to Artifactory using JFrog CLI, generate and upload SBOM using Syft'
 
 inputs:
   is_release:
@@ -25,6 +24,9 @@ inputs:
   artifactory_password:
     description: 'Artifactory password'
     required: true
+  dt_api_key:
+    description: 'Key for interacting with Dependency-Track API'
+    required: false
   npmrc:
     description: 'Full .npmrc content (one or more registry auth lines) exposed to the build as a secret'
     required: false
@@ -32,36 +34,11 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Checkout
-      uses: ks-no/github-actions-public/checkout@main
-
     - name: Setup JFrog CLI
-      uses: jfrog/setup-jfrog-cli@86dacb6974c66cc99e7651e1205f6581aaddba9a #v4.10.0
+      uses: ks-no/github-actions-public/setup-jfrog-cli@main
       with:
-        version: latest
-
-    - name: Configure JFrog CLI with Artifactory
-      shell: bash
-      env:
-        ARTIFACTORY_USERNAME: ${{ inputs.artifactory_username }}
-        ARTIFACTORY_PASSWORD: ${{ inputs.artifactory_password }}
-      run: |
-        jfrog config add artifactory \
-          --url="https://artifactory.fiks.ks.no" \
-          --user="$ARTIFACTORY_USERNAME" \
-          --password="$ARTIFACTORY_PASSWORD" \
-          --interactive=false \
-          --overwrite
-
-    - name: Set JFrog build name
-      shell: bash
-      env:
-        BUILD_NAME_INPUT: ${{ inputs.build_name }}
-      run: |
-        if [[ -z "$BUILD_NAME_INPUT" || "$BUILD_NAME_INPUT" == .* ]]; then
-          BUILD_NAME_INPUT="${GITHUB_REPOSITORY#*/}"
-        fi
-        echo "JFROG_CLI_BUILD_NAME=$BUILD_NAME_INPUT" >> "$GITHUB_ENV"
+        artifactory_username: ${{ inputs.artifactory_username }}
+        artifactory_password: ${{ inputs.artifactory_password }}
 
     - name: Set Docker repository
       id: set_repo
@@ -107,6 +84,29 @@ runs:
             jfrog docker push "$REPO_URL/${{ inputs.image_name }}:$tag"
           fi
         done
+
+    - name: Install Syft
+      shell: bash
+      run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+    - name: Generate SBOM
+      id: sbom
+      shell: bash
+      run: |
+        BOM_FILE="${IMAGE}-sbom.json"
+        syft scan ${IMAGE} -o ${SBOM_FORMAT}=${BOM_FILE}
+        echo "bom_file=$BOM_FILE" >> "$GITHUB_OUTPUT"
+      env:
+        IMAGE: ${{ inputs.image_name }}
+        SBOM_FORMAT: 'cyclonedx-json@1.6' # 1.6 er den nyeste versjonen av CycloneDX-formatet som Dependency-Track forstår
+
+    - name: Upload SBOM to Dependency-Track
+      uses: ks-no/github-actions-public/sbom-upload-and-report@main
+      with:
+        dependency_track_api_key: ${{ inputs.dt_api_key }}
+        project_name: ${{ inputs.image_name }}
+        is_release: ${{ inputs.is_release }}
+        bom_file: ${{ steps.sbom.outputs.bom_file }}
 
     - name: Publish build info
       shell: bash
