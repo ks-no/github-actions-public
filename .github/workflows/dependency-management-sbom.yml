@@ -254,12 +254,9 @@ jobs:
           syft_version: ${{ inputs.syft_version }}
           cyclonedx_cli_version: ${{ inputs.cyclonedx_cli_version }}
 
-      # Versjonering følger samme main/prod-standard som tjenestebygg og
-      # deploy-flyten: project_version sendes tom, så sbom-upload-and-report
-      # sin innebygde default slår inn (is_release -> "prod", ellers "main").
-      # fiks-parent-pom "deployes" aldri selv - det nærmeste vi kommer et
-      # reelt "deployet"-signal er at en tagget release er det nedstrøms
-      # tjenester faktisk bygger mot, mens main er ennå-ikke-released state.
+      # Container-images i container_image_refs skannes her, men deployes aldri
+      # herfra, så de følger bibliotek-standarden: "release" for taggede releaser,
+      # ellers "main" (samme project_version som BOM-opplastingen over).
       - name: Container Image SBOM Upload and Report
         if: inputs.container_image_refs != ''
         uses: ks-no/github-actions-public/sbom-upload-and-report@main
@@ -267,6 +264,7 @@ jobs:
           dependency_track_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
           is_release: ${{ steps.release_status.outputs.is_release }}
           project_name: ${{ steps.container_project_name.outputs.project_name }}
+          project_version: ${{ steps.release_status.outputs.project_version }}
           bom_file: ${{ steps.generate_container_sbom.outputs.bom_file }}
           artifactory_repository_name: ${{ steps.container_project_name.outputs.project_name }}
           artifactory_artifact_version: ${{ steps.version.outputs.resolved_version }}
