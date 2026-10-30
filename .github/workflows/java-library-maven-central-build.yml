@@ -163,13 +163,29 @@ jobs:
       - name: Rydd ~/.m2/repository før cache-restore
         run: rm -rf ~/.m2/repository
 
-      - name: Cache Maven packages
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 #v6.1.0
+      # Nøkkelen roterer månedlig. Uten rotasjon vokser cachen i det uendelige:
+      # restore-keys henter forrige cache, bygget laster ned versjonene dependabot
+      # nettopp bumpet, og save lagrer gammelt + nytt. Gamle versjoner blir aldri
+      # fjernet, fordi ingenting vet at de er døde. hashFiles evalueres her én gang,
+      # slik at restore og save bruker samme nøkkel selv om bygget endrer pom.xml.
+      - name: Resolve Maven cache key
+        id: cache_key
+        env:
+          OS: ${{ runner.os }}
+          POM_HASH: ${{ hashFiles('**/pom.xml') }}
+        run: |
+          PREFIX="${OS}-maven-$(date -u +%Y-%m)-"
+          echo "prefix=$PREFIX" >> "$GITHUB_OUTPUT"
+          echo "key=${PREFIX}${POM_HASH}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Maven cache
+        id: maven_cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 #v6.1.0
         with:
           path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          key: ${{ steps.cache_key.outputs.key }}
           restore-keys: |
-            ${{ runner.os }}-maven-
+            ${{ steps.cache_key.outputs.prefix }}
 
       - name: Clean cached SNAPSHOT artifacts
         run: |
@@ -388,3 +404,13 @@ jobs:
           project_version: ${{ inputs.is_release == true && 'release' || '' }}
           artifactory_repository_name: ${{ github.event.repository.name }}
           artifactory_artifact_version: ${{ steps.resolve_version.outputs.resolved_version }}
+
+      # Lagres bare fra default-branch. En cache som opprettes i en PR er scopet til
+      # den PR-ens egen ref og kan ikke leses av andre PR-er - den fyller bare opp
+      # repoets 10 GB-kvote og presser ut main-cachen som alle faktisk restorer fra.
+      - name: Save Maven cache
+        if: steps.maven_cache.outputs.cache-hit != 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 #v6.1.0
+        with:
+          path: ~/.m2/repository
+          key: ${{ steps.cache_key.outputs.key }}

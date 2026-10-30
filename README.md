@@ -81,6 +81,32 @@ and since the caller templates only build `main` on `push`, Dependabot always ar
 
 All reusable workflows in this repository use the action. Set `publish_from_dependabot: 'true'` to opt out.
 
+### Maven cache strategy
+
+The JVM builds share one caching scheme, implemented in `build-java-and-test`, `public-java-maven` and the
+two `java-library-*` workflows. Three rules keep `~/.m2/repository` from growing without bound:
+
+**The directory is wiped before restore.** On self-hosted runners `~/.m2/repository` survives between jobs,
+and between repositories that share a runner pool. Without `rm -rf ~/.m2/repository`, the cache save step
+stores that whole accumulated directory as this repository's cache — which is why every service used to end
+up at roughly the same size regardless of its own dependencies.
+
+**The cache is only saved from the default branch.** A cache created in a pull request is scoped to that
+PR's own ref and cannot be read by any other PR, so saving from PRs only consumes the repository's 10 GB
+quota and evicts the main-branch cache that every build actually restores from. Builds on PRs still restore.
+
+**The key rotates monthly.** `restore-keys` fetches the previous cache, the build downloads whatever versions
+Dependabot just bumped, and the save writes old plus new — old versions are never removed, because nothing
+knows they are dead. A `$(date -u +%Y-%m)` component in the key bounds that accumulation to one month. The
+cost is one cold build per repository per month.
+
+`hashFiles('**/pom.xml')` is evaluated once in a `Resolve Maven cache key` step so that restore and save use
+the same key even when the build rewrites `pom.xml` (as release builds do).
+
+Because the save is now an explicit step rather than a post-step, a failed build no longer refreshes the
+cache. The `dependency-management-sbom` workflow keeps its own separate local repository and key prefix, and
+only gets the monthly rotation — it never runs from a pull request.
+
 ### NuGet package signing (`dotnet-sign-nuget-packages`)
 
 Signs `.nupkg` files with a DigiCert KeyLocker code signing certificate and re-uploads them as a new artifact.
