@@ -1,5 +1,9 @@
 name: 'Create and Tag Release'
-description: 'Sets the Maven project version, commits, and creates a Git tag for a release.'
+description: |
+  Sets the Maven project version, commits, and creates a Git tag for a release.
+  
+  inputs: version, ks_github_app_token, artifactory_username, artifactory_password, [java_version="java21", reviewer=""]
+  outputs: release_body
 inputs:
   version:
     description: 'The release version to set (e.g., 1.2.3)'

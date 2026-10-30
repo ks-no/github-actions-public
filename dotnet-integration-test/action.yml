@@ -1,5 +1,8 @@
 name: .NET Integration Test
-description: Build and run integration tests with Artifactory and credentials
+description: |
+  Build and run integration tests with Artifactory and credentials
+  
+  inputs: [dotnet-version="8.0.x", artifactory-url="https://artifactory.fiks.ks.no/artifactory/api/nuget/nuget-all", artifactory-username="null", artifactory-password="null", source-name="nuget-all", configuration="Debug", restore-args="--verbosity normal --force", build-args="--no-restore --no-incremental --nologo --verbosity normal", test-args="--no-restore --no-build --nologo", test-logger="trx;LogFileName=results.trx"]
 
 inputs:
   dotnet-version:

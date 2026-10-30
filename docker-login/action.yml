@@ -1,5 +1,8 @@
 name: 'Log into Docker Hub'
-description: 'Log into Docker Hub.'
+description: |
+  Log into Docker Hub.
+  
+  inputs: token
 inputs:
   token: 
     description: 'The token for authenticating with Docker Hub.'

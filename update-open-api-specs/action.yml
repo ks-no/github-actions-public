@@ -1,8 +1,9 @@
 name: 'OpenAPI Spec CI'
-description: >
-  Lints, bundles, and deploys updated OpenAPI specifications.
-  Each spec file given is only processed if it differs from the corresponding file
-  residing in the `ks-no/ks-no.github.io` repo.
+description: |
+  Lints, bundles, and deploys updated OpenAPI specifications. Each spec file given is only processed
+  if it differs from the corresponding file residing in the `ks-no/ks-no.github.io` repo.
+  
+  inputs: specs, ks_github_app_token
 
 inputs:
   specs:

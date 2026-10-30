@@ -1,5 +1,8 @@
 name: 'Prepare JFrog CLI'
-description: 'Sets up JFrog CLI and configures it with Artifactory.'
+description: |
+  Sets up JFrog CLI and configures it with Artifactory.
+  
+  inputs: artifactory_username, artifactory_password
 
 inputs:
   artifactory_username:

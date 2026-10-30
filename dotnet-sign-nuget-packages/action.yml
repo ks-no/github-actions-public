@@ -1,8 +1,9 @@
 name: Sign NuGet Packages
-description: >-
-  Downloads NuGet packages, signs them with the NuGet client using a DigiCert KeyLocker
-  certificate (through the DigiCert KSP), verifies the signatures and re-uploads them.
-  Requires a Windows runner.
+description: |
+  Downloads NuGet packages, signs them with the NuGet client using a DigiCert KeyLocker certificate (through the DigiCert KSP), verifies the signatures and re-uploads them. Requires a Windows runner.
+  
+  inputs: sm-host, sm-keypair-alias, sm-api-key, sm-client-cert-file-base64, sm-client-cert-password, [artifact-name="nupkg", package-path="packages", signed-artifact-name="signed-nupkg", certificate-fingerprint="", timestamp-url="http://timestamp.digicert.com"]
+  outputs: certificate-fingerprint, certificate-subject
 
 inputs:
   artifact-name:

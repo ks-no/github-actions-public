@@ -1,8 +1,10 @@
 name: 'SBOM Upload and Report'
-description: >
-  Uploads a CycloneDX SBOM to Dependency-Track, stores in Artifactory for retention,
-  tags the project with the owning team from CODEOWNERS, and posts a vulnerability summary
+description: |
+  Uploads a CycloneDX SBOM to Dependency-Track, stores in Artifactory for retention, tags the project with the owning team from CODEOWNERS, and posts a vulnerability summary
   to the GitHub Actions Job Summary. Fails softly — never blocks the pipeline.
+  
+  inputs: [dependency_track_api_key="", is_release="false", project_name="{{ github.event.repository.name }}", project_version="", bom_file="", artifactory_repository_name="{{ github.event.repository.name }}", artifactory_artifact_version="", artifactory_fetch_version="", defer_dependency_track="false"]
+  outputs: artifactory_bom_url, artifactory_bom_sha256
 
 inputs:
   dependency_track_api_key:

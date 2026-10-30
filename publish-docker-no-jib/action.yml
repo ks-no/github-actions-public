@@ -1,6 +1,8 @@
----
 name: 'Publish Docker Image without Jib'
-description: 'Build and push Docker image to Artifactory using JFrog CLI'
+description: |
+  Build and push Docker image to Artifactory using JFrog CLI
+  
+  inputs: is_release, image_name, dockerfile, build_name, tags, artifactory_username, artifactory_password, [npmrc="null"]
 
 inputs:
   is_release:

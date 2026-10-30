@@ -1,5 +1,8 @@
 name: 'Java CI with Maven and JFrog'
-description: 'Builds, tests, and publishes a Java project using Maven and JFrog Artifactory.'
+description: |
+  Builds, tests, and publishes a Java project using Maven and JFrog Artifactory.
+  
+  inputs: java_version, artifactory_username, artifactory_password, ks_github_app_token, is_release, [version=null]
 inputs:
   java_version:
     description: 'The Java version to use (e.g., java8, java11)'

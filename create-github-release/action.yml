@@ -1,5 +1,8 @@
 name: .NET GitHub Release
-description: Create GitHub release with version bump
+description: |
+  Create GitHub release with version bump
+  
+  inputs: current-version, next-version, github-token, actor, ref-name, [release-notes="No changes specified", reviewer="No review required"]
 
 inputs:
   current-version:

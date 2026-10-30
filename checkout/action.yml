@@ -1,5 +1,8 @@
 name: 'Checkout'
-description: 'Composite action for checking out code, pinned to a specific SHA of actions/checkout.'
+description: |
+  Composite action for checking out code, pinned to a specific SHA of actions/checkout.
+  
+  inputs: [repository=null, ref=null, path=null, token="{{ github.token }}", submodules="true", fetch-depth="0", fetch-tags="true", clean="true", persist-credentials="true"]
 inputs:
   repository:
     description: 'Which repository (with owner) to check out. Defaults to the triggering repo.'

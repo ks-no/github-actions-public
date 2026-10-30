@@ -1,5 +1,8 @@
 name: 'Download Actions artifacts'
-description: 'Wrapper for actions/download-artifact, pinned to SHA'
+description: |
+  Wrapper for actions/download-artifact, pinned to SHA
+  
+  inputs: [path="null", name="null"]
 
 inputs:
   path:

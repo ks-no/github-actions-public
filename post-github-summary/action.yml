@@ -1,5 +1,8 @@
 name: Post Github Summary
-description: 'Post a summary comment on the actions performed in the workflow.'
+description: |
+  Post a summary comment on the actions performed in the workflow.
+  
+  inputs: git_tag, helm_chart_url, helm_chart_prov_url
 inputs:
   git_tag:
     description: 'The git tag of the release.'

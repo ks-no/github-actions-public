@@ -1,5 +1,9 @@
 name: 'Build and Publish Helm Chart'
-description: 'Builds a Helm chart, substitutes variables, signs it with GPG, and publishes it to Artifactory.'
+description: |
+  Builds a Helm chart, substitutes variables, signs it with GPG, and publishes it to Artifactory.
+  
+  inputs: chart_name, chart_version, image_tag, gpg_private_key, [host="null", tenant="null", project_helm_version="null", artifactory_username="null", artifactory_password="null", helm_folder="null", need_jfrog_setup="false"]
+  outputs: helm_chart_url, helm_chart_prov_url
 inputs:
   chart_name:
     description: 'The name of the Helm chart when published'

@@ -1,5 +1,8 @@
 name: 'Publish Docker Image with Jib, this is mostly for the Service pipeline'
-description: 'Builds and publishes a Docker image to Artifactory.'
+description: |
+  Builds and publishes a Docker image to Artifactory.
+  
+  inputs: version, image_name, tags, is_release, artifactory_username, artifactory_password, [path=".", java_version="java21"]
 inputs:
   version:
     description: 'The version tag for the Docker image.' #This might not be correct

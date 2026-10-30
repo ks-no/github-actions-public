@@ -1,7 +1,9 @@
 name: 'Resolve Dependency-Track Project'
-description: >
-  Resolves a Dependency-Track project UUID from either a pre-resolved UUID or
-  project name + version lookup. Fails softly and emits outputs for downstream actions.
+description: |
+  Resolves a Dependency-Track project UUID from either a pre-resolved UUID or project name + version lookup. Fails softly and emits outputs for downstream actions.
+  
+  inputs: dependency_track_api_key, project_name, [project_version="main", project_uuid="", base_url="https://dt.fiks.dev.ks.no", retry_count="3", retry_delay_seconds="2", warning_prefix="DT resolver"]
+  outputs: project_uuid, resolved, base_url
 
 inputs:
   dependency_track_api_key:
