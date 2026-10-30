@@ -106,8 +106,14 @@ runs:
       run: |
         jfrog mvn -U -B validate
 
+    # Samme byggeflagg som i build-java-and-test: MaxRAMPercentage lar JVM-en bruke
+    # halve runner-minnet, -T0.5C gir en halv byggetråd per kjerne, og kotlin-
+    # keepalive holder Kotlin-daemonen i live mellom modulene. installAtEnd/
+    # deployAtEnd er laget nettopp for parallelle bygg, så de spiller sammen med -T.
     - name: Build
       shell: bash
+      env:
+        MAVEN_OPTS: "-XX:MaxRAMPercentage=50"
       run: |
         if [[ "${{ inputs.is_release }}" == "true" && 
               ( "${GITHUB_REF}" == "refs/heads/main" || "${GITHUB_REF}" == "refs/heads/master" ) ]]; then
@@ -116,7 +122,7 @@ runs:
           export JFROG_CLI_BUILD_NAME="ks-maven-snapshot"
         fi
         export JFROG_CLI_BUILD_NUMBER="${{ github.run_number }}"
-        jfrog mvn -DinstallAtEnd=true -U -B clean install
+        jfrog mvn -Dkotlin.environment.keepalive=true -DinstallAtEnd=true -U -B -T0.5C clean install
 
     - name: Generate SBOM
       shell: bash
