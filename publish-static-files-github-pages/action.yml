@@ -1,5 +1,8 @@
 name: 'Publish static files to GitHub Pages'
-description: 'Publishes static files to GitHub Pages folder.'
+description: |
+  Publishes static files to GitHub Pages folder.
+  
+  inputs: ks_github_app_id, ks_github_app_private_key, files_folder, target_folder, [recurse="false"]
 inputs:
   ks_github_app_id:
     description: 'ID for the GitHub App.'

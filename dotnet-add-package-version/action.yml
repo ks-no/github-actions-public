@@ -1,5 +1,8 @@
 name: Add NuGet Package to Projects
-description: Add a specific NuGet package version to all csproj files
+description: |
+  Add a specific NuGet package version to all csproj files
+  
+  inputs: package-name, package-version, [no-restore="true"]
 
 inputs:
   package-name:

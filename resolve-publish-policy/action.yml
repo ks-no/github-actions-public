@@ -1,13 +1,13 @@
 name: 'Resolve publish policy'
-description: >
-  Avgjør om bygget skal publisere artefakter (Maven, Docker, Helm, NuGet) til Artifactory.
-  Dependabot-brancher publiserer ikke: snapshot-repoene er konfigurert til å ta vare på bare
-  de N siste versjonene per artefakt, og en haug dependabot-PR-er mellom to main-bygg dytter
-  ut imaget som fortsatt kjører i clusteret. Noder som blir restartet får da ImagePullBackoff.
+description: |
+  Avgjør om bygget skal publisere artefakter (Maven, Docker, Helm, NuGet) til Artifactory. Dependabot-brancher publiserer ikke: snapshot-repoene er konfigurert til å ta vare på bare
+  de N siste versjonene per artefakt, og en haug dependabot-PR-er mellom to main-bygg dytter ut imaget som fortsatt kjører i clusteret. Noder som blir restartet får da ImagePullBackoff.
   Tilsvarer `when { not { branch pattern: "^dependabot.*" } }` i fiks-buildlib.
 
-  Steget setter PUBLISH_ARTIFACTS i $GITHUB_ENV for resten av jobben, og returnerer samme verdi
-  som output `publish` for bruk på tvers av jobber (`needs.<job>.outputs...`).
+  Steget setter PUBLISH_ARTIFACTS i $GITHUB_ENV for resten av jobben, og returnerer samme verdi som output `publish` for bruk på tvers av jobber (`needs.<job>.outputs...`).
+  
+  inputs: [publish_from_dependabot="false"]
+  outputs: publish
 
 inputs:
   publish_from_dependabot:

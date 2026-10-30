@@ -1,5 +1,8 @@
 name: 'Validate Version Inputs'
-description: 'Fails if both version and semver_increment are provided, or if a release build has neither.'
+description: |
+  Fails if both version and semver_increment are provided, or if a release build has neither.
+  
+  inputs: [version="", semver_increment="", is_release="false"]
 
 inputs:
   version:

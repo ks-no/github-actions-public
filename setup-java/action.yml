@@ -1,5 +1,8 @@
 name: 'Set up Java'
-description: 'Wrapper for actions/setup-java, pinned to SHA'
+description: |
+  Wrapper for actions/setup-java, pinned to SHA
+  
+  inputs: java-version, distribution, [cache=null]
 
 inputs:
   java-version:

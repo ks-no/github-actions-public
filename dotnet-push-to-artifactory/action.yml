@@ -1,5 +1,8 @@
 name: Push to Artifactory
-description: Push NuGet packages to Artifactory
+description: |
+  Push NuGet packages to Artifactory
+  
+  inputs: artifactory-username, artifactory-password, [artifactory-url="https://artifactory.fiks.ks.no/artifactory/api/nuget/nuget-all", package-path="**/Release/*.nupkg", source-name="nuget-all"]
 
 inputs:
   artifactory-url:

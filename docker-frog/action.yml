@@ -1,5 +1,8 @@
 name: 'Prepare JFrog CLI for Docker'
-description: 'Sets up JFrog CLI, configures it with Artifactory, and logs in for Docker.'
+description: |
+  Sets up JFrog CLI, configures it with Artifactory, and logs in for Docker.
+  
+  inputs: artifactory_username, artifactory_password, [docker_repo="docker-all"]
 
 inputs:
   artifactory_username:

@@ -1,7 +1,9 @@
 name: 'Dependency License Check'
-description: >
-  Fetches Dependency-Track components for one project and posts a grouped
-  license inventory to the GitHub Job Summary. Fails softly.
+description: |
+  Fetches Dependency-Track components for one project and posts a grouped license inventory to the GitHub Job Summary. Fails softly.
+  
+  inputs: dependency_track_api_key, project_name, [project_version="main", project_uuid="", dependency_track_base_url="https://dt.fiks.dev.ks.no", max_detail_rows="400"]
+  outputs: project_uuid, total_components, unknown_license_count
 
 inputs:
   dependency_track_api_key:

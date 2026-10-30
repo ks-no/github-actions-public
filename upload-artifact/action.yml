@@ -1,5 +1,8 @@
 name: 'Store Actions artifacts'
-description: 'Wrapper for actions/upload-artifact, pinned to SHA'
+description: |
+  Wrapper for actions/upload-artifact, pinned to SHA
+  
+  inputs: path, [name=null, if-no-files-found="warn", include-hidden-files="false"]
 
 inputs:
   path:

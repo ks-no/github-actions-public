@@ -1,5 +1,8 @@
 name: 'Zizmor Security Audit'
-description: 'Run Zizmor GitHub Actions security linter with GitHub annotations output'
+description: |
+  Run Zizmor GitHub Actions security linter with GitHub annotations output
+  
+  inputs: [output_format="github"]
 
 inputs:
   output_format:
