@@ -166,12 +166,17 @@ jobs:
           git commit -am "Release ${{ steps.resolve_version.outputs.resolved_version }}"
           git tag -a ${{ steps.resolve_version.outputs.resolved_version }} -m "Release ${{ steps.resolve_version.outputs.resolved_version }}"
 
+      # Samme byggeflagg som i build-java-and-test: MaxRAMPercentage lar JVM-en bruke
+      # halve runner-minnet, -T0.5C gir en halv byggetråd per kjerne, og kotlin-
+      # keepalive holder Kotlin-daemonen i live mellom modulene. installAtEnd/
+      # deployAtEnd er laget nettopp for parallelle bygg, så de spiller sammen med -T.
       - name: Build
         env:
           JFROG_CLI_BUILD_NAME: ${{ github.repository }}
           JFROG_CLI_BUILD_NUMBER: ${{ github.run_number }}
+          MAVEN_OPTS: "-XX:MaxRAMPercentage=50"
         run: |
-          jfrog mvn -DinstallAtEnd=true -U -B clean org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom install
+          jfrog mvn -Dkotlin.environment.keepalive=true -DinstallAtEnd=true -U -B -T0.5C clean org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom install
 
       - name: Read built version from POM
         id: pom_version
