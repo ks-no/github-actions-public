@@ -117,6 +117,20 @@ jobs:
           java-version: ${{ steps.validate_java_version.outputs.java_version }}
           distribution: 'temurin'
 
+      # Månedlig rotasjon av nøkkelen, av samme grunn som i biblioteks- og
+      # tjenestebyggene: uten den bærer hver save med seg alle tidligere versjoner.
+      # Denne workflowen kjører bare på main/tags, så cachen lagres uansett ikke
+      # fra PR-er og trenger ikke det skillet.
+      - name: Resolve SBOM cache key
+        id: cache_key
+        env:
+          OS: ${{ runner.os }}
+          POM_HASH: ${{ hashFiles('**/pom.xml') }}
+        run: |
+          PREFIX="${OS}-m2-depmgmt-sbom-$(date -u +%Y-%m)-"
+          echo "prefix=$PREFIX" >> "$GITHUB_OUTPUT"
+          echo "key=${PREFIX}${POM_HASH}" >> "$GITHUB_OUTPUT"
+
       # Eget lokalrepo, fysisk atskilt fra ~/.m2/repository (ikke bare egen
       # cache-key): denne workflowen laster ned hele dependencyManagement
       # (kan bli mange GB) - langt mer enn det et biblioteksbygg trenger for
@@ -138,9 +152,9 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 #v6.1.0
         with:
           path: ~/.m2-dependency-management-sbom/repository
-          key: ${{ runner.os }}-m2-depmgmt-sbom-${{ hashFiles('**/pom.xml') }}
+          key: ${{ steps.cache_key.outputs.key }}
           restore-keys: |
-            ${{ runner.os }}-m2-depmgmt-sbom-
+            ${{ steps.cache_key.outputs.prefix }}
 
       - name: Prepare JFrog CLI
         uses: ks-no/github-actions-public/prepare-the-frog@main
