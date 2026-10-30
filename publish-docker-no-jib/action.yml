@@ -85,20 +85,11 @@ runs:
           fi
         done
 
-    - name: Install Syft
-      shell: bash
-      run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
-
     - name: Generate SBOM
       id: sbom
-      shell: bash
-      run: |
-        BOM_FILE="${IMAGE}-sbom.json"
-        syft scan ${IMAGE} -o ${SBOM_FORMAT}=${BOM_FILE}
-        echo "bom_file=$BOM_FILE" >> "$GITHUB_OUTPUT"
-      env:
-        IMAGE: ${{ inputs.image_name }}
-        SBOM_FORMAT: 'cyclonedx-json@1.6' # 1.6 er den nyeste versjonen av CycloneDX-formatet som Dependency-Track forstår
+      uses: ks-no/github-actions-public/syft-sbom@main
+      with:
+        image_name: ${{ inputs.image_name }}
 
     - name: Upload SBOM to Dependency-Track
       uses: ks-no/github-actions-public/sbom-upload-and-report@main

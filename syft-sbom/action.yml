@@ -1,0 +1,30 @@
+name: Syft SBOM
+description: 'Build SBOM for Docker images, using Syft'
+
+inputs:
+  image_name:
+    description: 'Name of the Docker image to generate SBOM for'
+    required: true
+
+outputs:
+  bom_file:
+    description: 'Name of the generated SBOM file'
+    value: ${{ steps.sbom.outputs.bom_file }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install Syft
+      shell: bash
+      run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+    - name: Generate SBOM
+      id: sbom
+      shell: bash
+      run: |
+        BOM_FILE="${IMAGE}-sbom.json"
+        syft scan ${IMAGE} -o ${SBOM_FORMAT}=${BOM_FILE}
+        echo "bom_file=$BOM_FILE" >> "$GITHUB_OUTPUT"
+      env:
+        IMAGE: ${{ inputs.image_name }}
+        SBOM_FORMAT: 'cyclonedx-json@1.6' # 1.6 er den nyeste versjonen av CycloneDX-formatet som Dependency-Track forstår
