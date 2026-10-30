@@ -61,10 +61,11 @@ runs:
         ARTIFACTORY_USERNAME: ${{ inputs.artifactory_username }}
         ARTIFACTORY_PASSWORD: ${{ inputs.artifactory_password }}
         DOCKER_DEFAULT_PLATFORM: linux/amd64
+        MAVEN_OPTS: "-XX:MaxRAMPercentage=50"
       run: |
         echo "$ARTIFACTORY_PASSWORD" | docker login https://docker-all.artifactory.fiks.ks.no -u "$ARTIFACTORY_USERNAME" --password-stdin
         git submodule update --init --recursive
-        jfrog mvn -B -T0.5C clean org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -Dcyclonedx.outputFormat=json install --build-name=$BUILD_NAME --build-number=$GITHUB_RUN_NUMBER
+        jfrog mvn -Dkotlin.environment.keepalive=true -B -T0.5C clean org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -Dcyclonedx.outputFormat=json install --build-name=$BUILD_NAME --build-number=$GITHUB_RUN_NUMBER
 
     - name: Archive surefire test results
       if: always()
