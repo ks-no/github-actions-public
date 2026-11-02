@@ -76,6 +76,13 @@ jobs:
           semver_increment: ${{ inputs.semver_increment }}
           is_release: ${{ inputs.is_release }}
 
+      - name: Set up GitHub app
+        id: app_token
+        uses: ks-no/github-actions-public/setup-github-app@main
+        with:
+          ks_github_app_id: ${{ secrets.KS_RUNNER_APP_ID }}
+          ks_github_app_private_key: ${{ secrets.KS_RUNNER_PRIVATE_KEY }}
+
       - name: Checkout code
         uses: ks-no/github-actions-public/checkout@main
         with:
@@ -88,6 +95,14 @@ jobs:
           is_release: ${{ inputs.is_release }}
           version: ${{ inputs.version }}
           semver_increment: ${{ inputs.semver_increment }}
+
+      - name: 'Release: Generate release notes'
+        id: release_notes
+        if: inputs.is_release
+        uses: ks-no/github-actions-public/generate-release-notes@main
+        with:
+          github-token: ${{ steps.app_token.outputs.app_token }}
+          actor: ${{ github.actor }}
 
       - name: Build and publish Docker image
         uses: ks-no/github-actions-public/publish-docker-no-jib@main
@@ -129,3 +144,13 @@ jobs:
             git push --atomic --follow-tags origin
         env:
           VERSION: ${{ steps.version.outputs.resolved_version }}
+
+      - name: 'Release: Create GitHub Release'
+        if: inputs.is_release
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe #v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ steps.app_token.outputs.app_token }}
+        with:
+          tag_name: ${{ inputs.version }}
+          name: "Release ${{ inputs.version }}"
+          body: ${{ steps.release_notes.outputs.release_body }}
