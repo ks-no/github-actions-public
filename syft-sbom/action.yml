@@ -14,9 +14,9 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install Syft
+    - name: Install Syft (pinned to version 1.55.0)
       shell: bash
-      run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+      run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/f15c3343e29dfb20cf6d82c820e7090b49808c96/install.sh | sh -s -- -b /usr/local/bin
 
     - name: Generate SBOM
       id: sbom

@@ -19,7 +19,8 @@ mkdir -p "$WORKDIR/bin"
 export PATH="$WORKDIR/bin:$PATH"
 
 echo "==> Installerer syft ${SYFT_VERSION}"
-curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+# curl henter installeringsskriptet fra versjon 1.52.0, som samsvarer med SYFT_VERSION satt i ./action.yml
+curl -sSfL https://raw.githubusercontent.com/anchore/syft/02ba369d13b4248395b20a504eca94b0cab564d8/install.sh \
   | sh -s -- -b "$WORKDIR/bin" "$SYFT_VERSION"
 
 echo "==> Installerer cyclonedx-cli ${CYCLONEDX_CLI_VERSION}"
