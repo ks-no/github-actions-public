@@ -47,3 +47,5 @@ jobs:
       # helm_folder: 'charts/my-service'
       # Optional (copy-edit): uncomment to set reviewer used for release pull request flow.
       # reviewer: 'team-platform'
+      # Optional (copy-edit): uncomment if the build runs non-amd64 containers and needs QEMU emulation.
+      # setup_qemu: true
