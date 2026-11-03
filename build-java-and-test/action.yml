@@ -21,6 +21,10 @@ inputs:
   version:
     description: 'The version to publish (e.g., 1.2.3 for release or 1.2.3-4-g5a6b7c8d for snapshot)'
     required: false
+  setup_qemu:
+    description: 'Set to true to install QEMU emulators, only needed when the build runs non-amd64 containers.'
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -53,6 +57,7 @@ runs:
           ${{ runner.os }}-maven-
 
     - name: Setup QEMU
+      if: inputs.setup_qemu == 'true'
       uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a #v4.0.0
 
     - name: Build with Maven (via JFrog CLI) and Generate SBOM
@@ -65,7 +70,9 @@ runs:
       run: |
         echo "$ARTIFACTORY_PASSWORD" | docker login https://docker-all.artifactory.fiks.ks.no -u "$ARTIFACTORY_USERNAME" --password-stdin
         git submodule update --init --recursive
-        jfrog mvn -Dkotlin.environment.keepalive=true -B -T0.5C clean org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -Dcyclonedx.outputFormat=json install --build-name=$BUILD_NAME --build-number=$GITHUB_RUN_NUMBER
+        # makeAggregateBom er et aggregator-mål og kjøres der det står i kommandoen. Står det
+        # før install, slår det opp søskenmodulenes SNAPSHOT-er i Artifactory før de er bygget.
+        jfrog mvn -Dkotlin.environment.keepalive=true -B -T0.5C clean install org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -Dcyclonedx.outputFormat=json --build-name=$BUILD_NAME --build-number=$GITHUB_RUN_NUMBER
 
     - name: Archive surefire test results
       if: always()
