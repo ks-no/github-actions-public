@@ -1,5 +1,8 @@
 name: .NET Build and Test
-description: Build and test .NET projects with Artifactory integration
+description: |
+  Build and test .NET projects with Artifactory integration
+  
+  inputs: [dotnet-version="8.0.x", build-opts="", artifactory-url="https://artifactory.fiks.ks.no/artifactory/api/nuget/nuget-all", artifactory-username=null, artifactory-password=null, restore-args="--verbosity normal", test-verbosity="normal"]
 
 inputs:
   dotnet-version:

@@ -2,6 +2,9 @@ name: Trigger Remote Integration Tests
 description: |
   Triggers an integration test workflow in a remote repo, creates a check run on the calling repo,
   and optionally waits for the tests to complete.
+  
+  inputs: app-token, integration-test-repo, integration-test-workflow, component-version, component-package-name, [wait-for-completion="false", poll-interval-seconds="30", max-wait-minutes="50", integration-test-ref=""]
+  outputs: check-run-id, conclusion
 
 inputs:
   app-token:

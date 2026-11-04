@@ -1,7 +1,8 @@
 name: 'Setup JFrog CLI'
-description: >
-  Installs JFrog CLI and configures it with Artifactory credentials.
-  Reusable by any pipeline (Java, .NET, etc.) — no build-tool-specific config.
+description: |
+  Installs JFrog CLI and configures it with Artifactory credentials. Reusable by any pipeline (Java, .NET, etc.) — no build-tool-specific config.
+  
+  inputs: artifactory_username, artifactory_password
 
 inputs:
   artifactory_username:

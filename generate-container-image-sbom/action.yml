@@ -1,11 +1,11 @@
 name: 'Generate Container Image SBOM'
-description: >
-  Genererer en CycloneDX SBOM for ett eller flere container-images (f.eks.
-  Jib-baseimages pinnet i en pom.xml) ved å skanne hvert image direkte mot
-  registry med Syft, og slå de resulterende BOM-ene sammen til ett enkelt
-  dokument med cyclonedx-cli. Dette gjør at alle images kan lastes opp som
-  ETT Dependency-Track-prosjekt uten at påfølgende opplastinger overskriver
-  hverandre (DT reconciler komponentlisten per opplasting).
+description: |
+  Genererer en CycloneDX SBOM for ett eller flere container-images (f.eks. Jib-baseimages pinnet i en pom.xml) ved å skanne hvert image direkte mot
+  registry med Syft, og slå de resulterende BOM-ene sammen til ett enkelt dokument med cyclonedx-cli. Dette gjør at alle images kan lastes opp som
+  ETT Dependency-Track-prosjekt uten at påfølgende opplastinger overskriver hverandre (DT reconciler komponentlisten per opplasting).
+  
+  inputs: image_refs, [output_bom_name="container-images-bom", syft_version="v1.52.0", cyclonedx_cli_version="v0.33.1"]
+  outputs: bom_file
 
 inputs:
   image_refs:

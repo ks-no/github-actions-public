@@ -1,8 +1,10 @@
 name: Check Prerelease Dependencies
-description: >-
+description: |
   Fails (or warns) if any resolved NuGet dependency (including transitive) is a
   prerelease/alpha version. Use as a release gate so snapshot versions never reach prod.
   Requires the project/solution to be restored first (reads the restore graph).
+  
+  inputs: [solution-or-project="", fail-on-prerelease="false", allow-prerelease=""]
 
 inputs:
   solution-or-project:

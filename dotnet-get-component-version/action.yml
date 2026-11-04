@@ -1,5 +1,9 @@
 name: Get Component Version
-description: Extract component version from project files or use specified version
+description: |
+  Extract component version from project files or use specified version
+  
+  inputs: [component-package-name=null, component-version=""]
+  outputs: component-version, component-package
 
 inputs:
   component-package-name:

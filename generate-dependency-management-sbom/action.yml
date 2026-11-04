@@ -1,11 +1,11 @@
 name: 'Generate Dependency Management SBOM'
 description: >
-  Genererer en CycloneDX SBOM som dekker alt som er versjonspinnet i et
-  Maven-prosjekts <dependencyManagement> (inkludert det som kommer inn via
-  importerte BOM-er), uavhengig av om noen reell modul i prosjektet faktisk
-  bruker avhengighetene. Materialiserer dependencyManagement som ekte
-  <dependency>-elementer i en syntetisk pom og kjører cyclonedx-maven-plugin
-  direkte mot den.
+  Genererer en CycloneDX SBOM som dekker alt som er versjonspinnet i et Maven-prosjekts <dependencyManagement> (inkludert det som kommer inn via
+  importerte BOM-er), uavhengig av om noen reell modul i prosjektet faktisk bruker avhengighetene. Materialiserer dependencyManagement som ekte
+  <dependency>-elementer i en syntetisk pom og kjører cyclonedx-maven-plugin direkte mot den.
+  
+  inputs: [sbom_group_id="no.ks.fiks.sbom", sbom_artifact_id="{{ github.event.repository.name }}-dependency-management-sbom", mvn_command="mvn", output_bom_name="dependency-management-bom", cyclonedx_plugin_version="2.9.1", working_directory=".", maven_repo_local=""]
+  outputs: bom_file
 
 inputs:
   sbom_group_id:

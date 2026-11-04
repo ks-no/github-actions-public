@@ -1,5 +1,9 @@
 name: Calculate Version
-description: Calculate version information for .NET projects
+description: |
+  Calculate version information for .NET projects
+  
+  inputs: branch-name, run-number, [specified-version="", is-release="false"]
+  outputs: current-version, next-version, full-version, version-suffix, build-opts
 
 inputs:
   specified-version:

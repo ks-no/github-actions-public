@@ -1,5 +1,8 @@
 name: 'Build and Publish .NET Package'
-description: 'Builds, signs, and publishes a .NET NuGet package to Artifactory and NuGet.org'
+description: |
+  Builds, signs, and publishes a .NET NuGet package to Artifactory and NuGet.org
+  
+  inputs: project_path, [push_to_nuget_org="false", artifactory_username=null, artifactory_password=null, code_sign_cert_base64=null, code_sign_pfx_pass=null, nuget_api_key=null]
 
 inputs:
   project_path:

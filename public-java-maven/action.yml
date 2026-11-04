@@ -1,5 +1,8 @@
 name: 'Main Java Library Build for public Maven Releases'
-description: 'GitHub Actions composite to build, test, publish and promote a Java library (converted from Jenkins pipeline).'
+description: |
+  GitHub Actions composite to build, test, publish and promote a Java library (converted from Jenkins pipeline).
+  
+  inputs: java_version, artifactory_username, artifactory_password, ks_github_app_id, ks_github_app_private_key, gpg_private_key, gpg_passphrase, [is_release="false", version=null, maven_settings_xml=null]
 
 inputs:
   java_version:

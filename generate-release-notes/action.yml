@@ -1,5 +1,9 @@
 name: Generate Release Notes
-description: Generate release notes using git-releasenotes with reviewer information
+description: |
+  Generate release notes using git-releasenotes with reviewer information
+  
+  inputs: github-token, actor, [reviewer=""]
+  outputs: release_body
 
 inputs:
   github-token:

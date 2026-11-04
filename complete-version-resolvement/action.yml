@@ -1,5 +1,9 @@
 name: 'Resolve Version'
-description: 'Resolves the version to use for a build, depending on whether it is a release or not.'
+description: |
+  Resolves the version to use for a build, depending on whether it is a release or not.
+  
+  inputs: is_release, [version="", semver_increment="", snapshot_string="", strip_commit_sha="false"]
+  outputs: resolved_version
 
 inputs:
   version:

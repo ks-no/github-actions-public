@@ -1,5 +1,8 @@
 name: Generate SBOM
-description: Generate Software Bill of Materials using CycloneDX
+description: |
+  Generate Software Bill of Materials using CycloneDX
+  
+  inputs: version, [output-path="."]
 
 inputs:
   version:

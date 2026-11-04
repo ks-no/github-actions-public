@@ -1,5 +1,8 @@
 name: 'Deploy to 013'
-description: 'Sends a deployment message to AWS SQS after authenticating with OIDC. Optionally fetches SBOM from Artifactory and uploads to Dependency-Track.'
+description: |
+  Sends a deployment message to AWS SQS after authenticating with OIDC. Optionally fetches SBOM from Artifactory and uploads to Dependency-Track.
+  
+  inputs: helm_chart, environment, version, ks_github_app_id, ks_github_app_private_key, [artifactory_username="", artifactory_password="", dependency_track_api_key=""]
 inputs:
   helm_chart:
     description: 'Helm-chart to deploy'

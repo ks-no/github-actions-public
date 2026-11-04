@@ -1,8 +1,9 @@
 name: 'Tag Dependency-Track Project by CODEOWNERS Team'
-description: >
-  Parses CODEOWNERS for the primary team slug and idempotently applies a
-  team:<slug> tag to the corresponding Dependency-Track project.
+description: |
+  Parses CODEOWNERS for the primary team slug and idempotently applies a team:<slug> tag to the corresponding Dependency-Track project.
   Fails softly — never blocks the pipeline.
+  
+  inputs: dependency_track_api_key, project_name, [project_version="main", project_uuid=""]
 
 inputs:
   dependency_track_api_key:

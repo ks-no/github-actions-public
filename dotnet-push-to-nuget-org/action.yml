@@ -1,5 +1,8 @@
 name: Push to NuGet.org
-description: Push NuGet packages to NuGet.org via OIDC trusted publishing (default) or API key.
+description: |
+  Push NuGet packages to NuGet.org via OIDC trusted publishing (default) or API key.
+  
+  inputs: [mode="api-key", nuget-user="", api-key="", package-path="packages", nuget-url="https://api.nuget.org/v3/index.json", verify-signature="false"]
 
 inputs:
   mode:

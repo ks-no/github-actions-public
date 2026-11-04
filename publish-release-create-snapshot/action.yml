@@ -1,5 +1,8 @@
 name: 'Create Next Snapshot Version'
-description: 'Creates the next snapshot version after a release.'
+description: |
+  Creates the next snapshot version after a release.
+  
+  inputs: artifactory_username, artifactory_password, version, ks_github_app_token, release_body
 inputs:
   artifactory_username:
     description: 'The username for Artifactory'

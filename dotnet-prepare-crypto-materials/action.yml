@@ -1,5 +1,9 @@
 name: Prepare Cryptographic Materials
-description: Decode and prepare certificates and keys for testing
+description: |
+  Decode and prepare certificates and keys for testing
+  
+  inputs: maskinporten-cert-base64, fiksio-private-key-base64, [cert-output-filename="maskinporten_test_cert.p12", key-output-filename="fiksio_private_key.pem"]
+  outputs: cert-path, key-path
 
 inputs:
   maskinporten-cert-base64:
