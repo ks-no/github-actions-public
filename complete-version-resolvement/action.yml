@@ -35,6 +35,16 @@ runs:
       id: resolve
       shell: bash
       run: |        
+        # Et shallow checkout gjør "git describe" ubrukelig: den feiler, stderr er
+        # undertrykt, og fallbacken under gir 0.0.0-1-g<sha> - altså en stille gal
+        # versjon i stedet for en feilmelding. Fallbacken er ment for repoer som
+        # ennå ikke har tags, ikke for feilkonfigurert checkout, så vi skiller de
+        # to tilfellene her.
+        if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+          echo "::error::Repoet er sjekket ut shallow, så versjonen kan ikke utledes fra git describe. Sett fetch-depth: 0 på checkout-steget foran denne actionen."
+          exit 1
+        fi
+
         if [ "$IS_RELEASE" = "false" ]; then
           VERSION=$(git describe --tags --abbrev=8 2>/dev/null || echo "0.0.0-$(git rev-list --count HEAD)-g$(git rev-parse --short=8 HEAD)")
           if [ "$SUFFIX" == "-" ]; then

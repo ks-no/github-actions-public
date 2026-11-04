@@ -14,7 +14,12 @@ jobs:
   zizmor-scan:
     runs-on: ubuntu-latest
     steps:
+      # zizmor skanner kun filene i arbeidstreet.
       - uses: ks-no/github-actions-public/checkout@main
+        with:
+          fetch-depth: '1'
+          fetch-tags: false
+          submodules: false
 
       - uses: ks-no/github-actions-public/zizmor-scan@main
         with:

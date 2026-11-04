@@ -34,6 +34,10 @@ runs:
   steps:
     - name: Checkout
       uses: ks-no/github-actions-public/checkout@main
+      with:
+        # Bygger bare image fra arbeidstreet - versjon kommer inn som input.
+        fetch-depth: '1'
+        fetch-tags: false
 
     - name: Setup JFrog CLI
       uses: jfrog/setup-jfrog-cli@86dacb6974c66cc99e7651e1205f6581aaddba9a #v4.10.0
