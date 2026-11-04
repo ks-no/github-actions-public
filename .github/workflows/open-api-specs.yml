@@ -79,8 +79,10 @@ jobs:
       - name: Check out code
         uses: ks-no/github-actions-public/checkout@main
         with:
-          fetch-depth: 0
-          fetch-tags: true
+          # Jobben leser spec-filer fra arbeidstreet og publiserer dem videre.
+          # Ingen git describe, tags eller historikk i bruk.
+          fetch-depth: '1'
+          fetch-tags: false
           submodules: true
 
       - name: Set up github app for pushing changes
@@ -168,6 +170,7 @@ jobs:
           token: ${{ steps.setup_github_app.outputs.app_token }}
           path: ks-no.github.io
           ref: source
+          fetch-depth: '1'
 
       - name: Copy specs to ks-no.github.io
         if: github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
