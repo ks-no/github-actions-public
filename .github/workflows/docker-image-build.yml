@@ -86,7 +86,7 @@ jobs:
       - name: Checkout code
         uses: ks-no/github-actions-public/checkout@main
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Resolve version
         uses: ks-no/github-actions-public/complete-version-resolvement@main
