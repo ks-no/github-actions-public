@@ -27,9 +27,13 @@ If your repo demands that all Actions workflow calls are pinned to a commit SHA,
 
 - `nodejs-service-build`
 
+### For simple Docker image-based services:
+
+- `docker-image-build`
+
 ### Various
 
-- `deploy` *(to deploy a service with Helm; the Helm-chart values must already have been populated)*
+- `deploy` *(to deploy a service with Helm; the Helm-chart must already have been populated with values and uploaded to Artifactory)*
 - `open-api-specs` *(to publish OpenAPI spec files for spec-first projects)*
 - `license-check` *(to check project licenses against Dependency-Track)*
 - `dependency-management-sbom` *(to generate and publish a CycloneDX SBOM covering a Maven project's entire `<dependencyManagement>`, for parent POMs)*
