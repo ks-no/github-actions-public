@@ -56,7 +56,7 @@ on:
       DEPENDENCY_TRACK_API_KEY:
         required: true
       GPG_PRIVATE_KEY:
-        required: true
+        required: false
 
 jobs:
   build:
