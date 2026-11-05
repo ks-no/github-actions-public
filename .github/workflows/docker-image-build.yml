@@ -62,7 +62,7 @@ jobs:
   build:
     permissions:
       contents: write
-      id-token: read
+      id-token: write
     runs-on: [self-hosted, x64]
     timeout-minutes: 20
     env:
