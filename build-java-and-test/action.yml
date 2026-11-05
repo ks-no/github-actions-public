@@ -21,6 +21,10 @@ inputs:
   version:
     description: 'The version to publish (e.g., 1.2.3 for release or 1.2.3-4-g5a6b7c8d for snapshot)'
     required: false
+  setup_qemu:
+    description: 'Set to true to install QEMU emulators, only needed when the build runs non-amd64 containers.'
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -44,15 +48,41 @@ runs:
         fi
         $JAVA_VERSION_CMD
 
-    - name: Cache Maven packages
-      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 #v5.0.4
+    # På self-hosted runnere overlever ~/.m2/repository mellom jobber - og mellom
+    # repoer som deler runner-pool. Uten denne ryddingen feier cache-save hele den
+    # akkumulerte katalogen inn som dette repoets cache, og alle tjenester ender på
+    # samme størrelse uavhengig av sine egne avhengigheter.
+    - name: Rydd ~/.m2/repository før cache-restore
+      shell: bash
+      run: rm -rf ~/.m2/repository
+
+    # Nøkkelen roterer månedlig. Uten rotasjon vokser cachen i det uendelige:
+    # restore-keys henter forrige cache, bygget laster ned versjonene dependabot
+    # nettopp bumpet, og save lagrer gammelt + nytt. Gamle versjoner blir aldri
+    # fjernet, fordi ingenting vet at de er døde. hashFiles evalueres her én gang,
+    # slik at restore og save bruker samme nøkkel selv om bygget endrer pom.xml.
+    - name: Resolve Maven cache key
+      id: cache_key
+      shell: bash
+      env:
+        OS: ${{ runner.os }}
+        POM_HASH: ${{ hashFiles('**/pom.xml') }}
+      run: |
+        PREFIX="${OS}-maven-$(date -u +%Y-%m)-"
+        echo "prefix=$PREFIX" >> "$GITHUB_OUTPUT"
+        echo "key=${PREFIX}${POM_HASH}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore Maven cache
+      id: maven_cache
+      uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 #v5.0.4
       with:
         path: ~/.m2/repository
-        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        key: ${{ steps.cache_key.outputs.key }}
         restore-keys: |
-          ${{ runner.os }}-maven-
+          ${{ steps.cache_key.outputs.prefix }}
 
     - name: Setup QEMU
+      if: inputs.setup_qemu == 'true'
       uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a #v4.0.0
 
     - name: Build with Maven (via JFrog CLI) and Generate SBOM
@@ -61,10 +91,13 @@ runs:
         ARTIFACTORY_USERNAME: ${{ inputs.artifactory_username }}
         ARTIFACTORY_PASSWORD: ${{ inputs.artifactory_password }}
         DOCKER_DEFAULT_PLATFORM: linux/amd64
+        MAVEN_OPTS: "-XX:MaxRAMPercentage=50"
       run: |
         echo "$ARTIFACTORY_PASSWORD" | docker login https://docker-all.artifactory.fiks.ks.no -u "$ARTIFACTORY_USERNAME" --password-stdin
         git submodule update --init --recursive
-        jfrog mvn -B -T0.5C clean org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -Dcyclonedx.outputFormat=json install --build-name=$BUILD_NAME --build-number=$GITHUB_RUN_NUMBER
+        # makeAggregateBom er et aggregator-mål og kjøres der det står i kommandoen. Står det
+        # før install, slår det opp søskenmodulenes SNAPSHOT-er i Artifactory før de er bygget.
+        jfrog mvn -Dkotlin.environment.keepalive=true -B -T0.5C clean install org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -Dcyclonedx.outputFormat=json --build-name=$BUILD_NAME --build-number=$GITHUB_RUN_NUMBER
 
     - name: Archive surefire test results
       if: always()
@@ -129,3 +162,13 @@ runs:
       shell: bash
       run: |
         jfrog rt build-promote $BUILD_NAME $GITHUB_RUN_NUMBER ks-maven
+
+    # Lagres bare fra default-branch. En cache som opprettes i en PR er scopet til
+    # den PR-ens egen ref og kan ikke leses av andre PR-er - den fyller bare opp
+    # repoets 10 GB-kvote og presser ut main-cachen som alle faktisk restorer fra.
+    - name: Save Maven cache
+      if: steps.maven_cache.outputs.cache-hit != 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 #v5.0.4
+      with:
+        path: ~/.m2/repository
+        key: ${{ steps.cache_key.outputs.key }}

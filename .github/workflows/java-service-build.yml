@@ -80,6 +80,11 @@ on:
         required: false
         type: string
         default: '3.9.11'
+      setup_qemu:
+        description: 'Set to true to install QEMU emulators, only needed when the build runs non-amd64 containers.'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   id-token: write
@@ -175,6 +180,7 @@ jobs:
           ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
           is_release: ${{ inputs.is_release }}
           version: ${{ steps.resolve_version.outputs.resolved_version }}
+          setup_qemu: ${{ inputs.setup_qemu }}
 
       - name: 'Build and Push Helm'
         if: inputs.helm_chart != '' && env.PUBLISH_ARTIFACTS == 'true'

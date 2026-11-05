@@ -23,8 +23,10 @@ runs:
     - name: Check out code
       uses: ks-no/github-actions-public/checkout@main
       with:
-        fetch-depth: 0
-        fetch-tags: true
+        # Stegene under kopierer bare filer ut av treet - ingen git describe,
+        # tags eller historikk i bruk.
+        fetch-depth: '1'
+        fetch-tags: false
         submodules: true
         clean: false
 
@@ -43,6 +45,10 @@ runs:
         token: ${{ steps.setup_github_app.outputs.app_token }}
         path: ks-no.github.io
         ref: source
+        # ks-no.github.io er ~750 MB med full historikk og har ingen tags. Vi legger
+        # bare én commit på toppen av source, så det holder med siste commit.
+        fetch-depth: '1'
+        fetch-tags: false
 
     - name: Copy files to ks-no.github.io
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'

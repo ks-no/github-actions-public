@@ -126,6 +126,11 @@ jobs:
         uses: ks-no/github-actions-public/resolve-publish-policy@main
 
       - uses: ks-no/github-actions-public/checkout@main
+        with:
+          # dotnet-calculate-version utleder versjonen fra branch-navn og
+          # run-number, ikke fra git. Ingen jobb her leser historikk.
+          fetch-depth: '1'
+          fetch-tags: false
 
       - name: Zizmor Scan
         continue-on-error: true
@@ -147,6 +152,9 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: ks-no/github-actions-public/checkout@main
+        with:
+          fetch-depth: '1'
+          fetch-tags: false
 
       - name: Build and Test
         uses: ks-no/github-actions-public/dotnet-build-and-test@main
@@ -247,8 +255,8 @@ jobs:
     steps:
       - uses: ks-no/github-actions-public/checkout@main
         with:
-          fetch-depth: 0
-          fetch-tags: true
+          fetch-depth: '1'
+          fetch-tags: false
           submodules: true
 
       - name: Build and Test

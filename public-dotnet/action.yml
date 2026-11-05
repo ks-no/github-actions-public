@@ -31,6 +31,9 @@ runs:
       - name: Checkout
         uses: ks-no/github-actions-public/checkout@main
         with:
+          # Versjonen regnes ut av dotnet-calculate-version, som ikke bruker git.
+          fetch-depth: '1'
+          fetch-tags: false
           submodules: true
 
       - name: .NET SDK info
