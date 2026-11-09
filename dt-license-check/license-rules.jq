@@ -1,5 +1,5 @@
-# License rules and text helpers shared by the jq programs in
-# dt-license-check/action.yml. Load with: jq -L "$GITHUB_ACTION_PATH" 'include "license-rules"; ...'
+# License rules and text helpers shared by the jq programs in the
+# dt-license-check scripts. Load with: jq -L "$GITHUB_ACTION_PATH" 'include "license-rules"; ...'
 
 # Category from a license's DT license groups. The most restrictive group wins:
 # Non-Commercial, then Copyleft, then any custom group (these rules do not know
