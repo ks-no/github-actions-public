@@ -286,8 +286,8 @@ runs:
       run: |
         set -uo pipefail
 
-        RESPONSE_FILE=$(mktemp)
-        trap 'rm -f "$RESPONSE_FILE"' EXIT
+        # The runner empties RUNNER_TEMP when the job ends, so the file needs no cleanup.
+        RESPONSE_FILE=$(mktemp -p "$RUNNER_TEMP")
         ENCODED_NAME=$(jq -rn --arg v "$DT_PROJECT_NAME" '$v | @uri')
 
         LOOKUP_CODE=$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
