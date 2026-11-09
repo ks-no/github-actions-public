@@ -10,10 +10,6 @@ source "$GITHUB_ACTION_PATH/helpers.sh"
 # license check must never stop the pipeline.
 trap 'warn_and_exit "Unexpected error while generating license inventory."' ERR
 
-if [[ "$DT_PROJECT_RESOLVED" != "true" || -z "$DT_PROJECT_UUID" ]]; then
-  warn_and_exit "Project could not be resolved; skipping license inventory."
-fi
-
 # Work files go in one folder in RUNNER_TEMP. The runner empties RUNNER_TEMP
 # when the job ends, so they need no cleanup.
 WORK_DIR=$(mktemp -d -p "$RUNNER_TEMP")

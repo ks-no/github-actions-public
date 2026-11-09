@@ -56,11 +56,11 @@ runs:
 
     - name: Fetch components from DT
       id: components
+      if: steps.resolve_project.outputs.resolved == 'true'
       shell: bash
       env:
         DT_API_KEY: ${{ inputs.dependency_track_api_key }}
         DT_PROJECT_UUID: ${{ steps.resolve_project.outputs.project_uuid }}
-        DT_PROJECT_RESOLVED: ${{ steps.resolve_project.outputs.resolved }}
         DT_BASE_URL: ${{ steps.resolve_project.outputs.base_url }}
       run: bash "$GITHUB_ACTION_PATH/fetch-components.sh"
 
