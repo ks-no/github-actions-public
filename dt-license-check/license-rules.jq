@@ -1,5 +1,5 @@
-# License rules shared by the jq programs in dt-license-check/action.yml.
-# Load with: jq -L "$GITHUB_ACTION_PATH" 'include "license-rules"; ...'
+# License rules and text helpers shared by the jq programs in
+# dt-license-check/action.yml. Load with: jq -L "$GITHUB_ACTION_PATH" 'include "license-rules"; ...'
 
 # Category from a license's DT license groups. The most restrictive group wins:
 # Non-Commercial, then Copyleft, then any custom group (these rules do not know
@@ -46,3 +46,15 @@ def instruction($category; $license):
 # own warning. Weak Copyleft and Permissive are not counted.
 def needs_review($category):
   ["Unknown", "Weak Copyleft", "Permissive"] | any(. == $category) | not;
+
+# Removes <, > and | from text that goes into the job summary. Component names,
+# versions and license texts come from DT and the SBOM, so they must not be able
+# to add HTML or break a Markdown table.
+def clean_md: gsub("[<>|]"; "");
+
+# License text on one line, at most 900 characters, cut at a word boundary.
+def short_license_text:
+  tostring
+  | gsub("[\\r\\n]+"; " ")
+  | gsub("[ \\t]+"; " ")
+  | if (length > 900) then ((.[0:900] | sub("\\s+\\S*$"; "")) + "...") else . end;
