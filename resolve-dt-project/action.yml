@@ -5,7 +5,7 @@ description: >
 
 inputs:
   dependency_track_api_key:
-    description: 'API key for Dependency-Track (PORTFOLIO_MANAGEMENT required for lookup).'
+    description: 'API key for Dependency-Track (needs VIEW_PORTFOLIO to look up the project).'
     required: true
   project_name:
     description: 'Dependency-Track project name (typically github.event.repository.name).'
