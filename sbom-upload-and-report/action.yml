@@ -209,11 +209,13 @@ runs:
 
         RESPONSE_FILE="$RUNNER_TEMP/dt-bom-response.json"
 
+        # --form-string sends the name and version as plain text. With -F, curl would
+        # read a file instead if the value started with @ or <.
         HTTP_CODE=$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' \
           --connect-timeout 10 --max-time 120 \
           -X POST -H "X-Api-Key: $DT_API_KEY" \
-          -F "projectName=$DT_PROJECT_NAME" \
-          -F "projectVersion=$PROJECT_VERSION" \
+          --form-string "projectName=$DT_PROJECT_NAME" \
+          --form-string "projectVersion=$PROJECT_VERSION" \
           -F "autoCreate=true" \
           -F "bom=@$BOM_FILE" \
           "$DT_BASE_URL/api/v1/bom") || true
@@ -234,7 +236,7 @@ runs:
             echo "project_uuid=$PROJECT_UUID" >> "$GITHUB_OUTPUT"
             echo "::debug::DT project UUID: $PROJECT_UUID"
           else
-            echo "::warning::SBOM upload: Dependency-Track did not return a project UUID; team tagging and the vulnerability summary are skipped."
+            echo "::warning::SBOM upload: Dependency-Track did not return a project UUID; team tagging, the vulnerability summary and release deactivation are skipped."
           fi
         else
           echo "::warning::SBOM upload to Dependency-Track returned HTTP $HTTP_CODE"
