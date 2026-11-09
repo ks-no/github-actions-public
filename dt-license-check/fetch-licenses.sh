@@ -100,7 +100,13 @@ if [[ "$LICENSES_HTTP" =~ ^2[0-9]{2}$ ]]; then
     FETCHED_LICENSE_COUNT=$((FETCHED_LICENSE_COUNT + 1))
   done < "$UNIQUE_LICENSES_FILE"
 else
-  echo "::warning::DT license check: Failed to fetch license catalog (HTTP $LICENSES_HTTP), falling back to regex-based categorization."
+  # curl reports 000 when no HTTP response arrived (connection error or timeout).
+  if [[ "$LICENSES_HTTP" =~ ^[1-5][0-9]{2}$ ]]; then
+    LICENSES_RESULT="HTTP $LICENSES_HTTP"
+  else
+    LICENSES_RESULT="no HTTP response"
+  fi
+  echo "::warning::DT license check: Failed to fetch license catalog (${LICENSES_RESULT}), falling back to regex-based categorization."
   LICENSE_INFO_MAP='{}'
 fi
 

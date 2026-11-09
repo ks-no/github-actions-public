@@ -36,7 +36,8 @@ while [[ "$PAGE_INDEX" -le "$MAX_PAGES" ]]; do
     -H "X-Api-Key: $DT_API_KEY" \
     "$COMPONENTS_URL") || true
 
-  if ! [[ "$HTTP_CODE" =~ ^[0-9]{3}$ ]]; then
+  # curl reports 000 when no HTTP response arrived (connection error or timeout).
+  if ! [[ "$HTTP_CODE" =~ ^[1-5][0-9]{2}$ ]]; then
     warn_and_exit "Failed to fetch components (no HTTP response)."
   fi
 
