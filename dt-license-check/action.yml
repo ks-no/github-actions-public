@@ -45,19 +45,14 @@ runs:
   steps:
     - name: Resolve DT project
       id: resolve_project
-      shell: bash
-      env:
-        DT_API_KEY: ${{ inputs.dependency_track_api_key }}
-        DT_PROJECT_NAME: ${{ inputs.project_name }}
-        DT_PROJECT_VERSION: ${{ inputs.project_version }}
-        DT_PROJECT_UUID_INPUT: ${{ inputs.project_uuid }}
-        DT_BASE_URL_INPUT: ${{ inputs.dependency_track_base_url }}
-        DT_RETRY_COUNT: '3'
-        DT_RETRY_DELAY_SECONDS: '2'
-        DT_WARNING_PREFIX: 'DT license check'
-      run: |
-        set -euo pipefail
-        bash "${GITHUB_ACTION_PATH}/../resolve-dt-project/resolve-project.sh"
+      uses: ks-no/github-actions-public/resolve-dt-project@main
+      with:
+        dependency_track_api_key: ${{ inputs.dependency_track_api_key }}
+        project_name: ${{ inputs.project_name }}
+        project_version: ${{ inputs.project_version }}
+        project_uuid: ${{ inputs.project_uuid }}
+        base_url: ${{ inputs.dependency_track_base_url }}
+        warning_prefix: 'DT license check'
 
     - name: Fetch components from DT
       id: components
