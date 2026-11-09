@@ -153,7 +153,7 @@ jobs:
         run: |
           for file in ${{ steps.bundled_files.outputs.files }}; do
             filename=$(basename "$file" .json)
-            redocly build-docs "$file" -o "build/$filename.html" --disableGoogleFont true
+            redocly build-docs "$file" -o "build/$filename.html"
           done
 
       - name: Upload HTML reports as artifact
