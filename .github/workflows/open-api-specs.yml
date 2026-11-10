@@ -186,9 +186,14 @@ jobs:
             cp "$file" "ks-no.github.io/static/api/"
           done
 
+      # Flere repoer pusher til ks-no.github.io/source, så pushen kan bli avvist fordi et
+      # annet bygg kom først. Rebase på nytt og prøv igjen. Hvert repo skriver sine egne
+      # spec-filer, så en konflikt betyr at to bygg publiserer samme fil - da feiler vi.
       - name: Commit and push changes
         if: github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
         shell: bash
+        env:
+          SOURCE_REPO: ${{ github.repository }}
         run: |
           cd ks-no.github.io
           git config --global user.name 'github-actions[bot]'
@@ -196,10 +201,23 @@ jobs:
           git add static/api/*.json
           if git diff --staged --quiet; then
             echo "No changes to commit"
-          else
-            git commit -m "Update OpenAPI specs"
-            git push origin HEAD:source
+            exit 0
           fi
+          git commit -m "Update OpenAPI specs from $SOURCE_REPO"
+          for attempt in 1 2 3 4 5; do
+            if ! git pull --rebase origin source; then
+              git rebase --abort || true
+              echo "::error::Konflikt mot ks-no.github.io/source. Et annet bygg har endret de samme spec-filene."
+              exit 1
+            fi
+            if git push origin HEAD:source; then
+              exit 0
+            fi
+            echo "Push avvist (forsøk $attempt av 5), prøver igjen ..."
+            sleep $((attempt * 2 + RANDOM % 5))
+          done
+          echo "::error::Klarte ikke å pushe til ks-no.github.io etter 5 forsøk."
+          exit 1
 
       - name: Trigger TypeScript model generation
         if: github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
