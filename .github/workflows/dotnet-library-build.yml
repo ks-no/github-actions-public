@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       is-release:
-        description: 'Release build? (signs with DigiCert KeyLocker and publishes to nuget.org)'
+        description: 'Release build? (signs with DigiCert KeyLocker and publishes to nuget.org). Only from main or master.'
         type: boolean
         required: false
         default: false
@@ -121,6 +121,16 @@ jobs:
       build-opts: ${{ steps.version.outputs.build-opts }}
       publish: ${{ steps.publish_policy.outputs.publish }}
     steps:
+      - name: Require main or master for release builds
+        if: inputs.is-release
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$REF" != "refs/heads/main" ] && [ "$REF" != "refs/heads/master" ]; then
+            echo "::error::is-release requires main or master, but this run is on $REF. Use push-to-nuget-org for a pre-release from a branch."
+            exit 1
+          fi
+
       - name: Resolve publish policy
         id: publish_policy
         uses: ks-no/github-actions-public/resolve-publish-policy@main
