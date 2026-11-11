@@ -52,7 +52,13 @@ runs:
       env: 
         GITHUB_TOKEN: ${{ inputs.github-token }}
       run: |
-        RELEASE_NOTES=$(git-releasenotes -T -p)
+        if [[ -n "$(git tag --list)" ]]; then
+          RELEASE_NOTES=$(git-releasenotes -T -p)
+        else
+          # First release: git-releasenotes needs a previous tag to diff against
+          echo "::warning::No tags found in repository, falling back to full commit history for release notes"
+          RELEASE_NOTES=$(git log --pretty=format:'- %s')
+        fi
         
         BODY="$RELEASE_NOTES"
         BODY+=$'\n\nReleased by: ${{ inputs.actor }}'
