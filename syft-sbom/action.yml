@@ -27,7 +27,7 @@ runs:
       shell: bash
       run: |
         BOM_FILE="${IMAGE}-sbom.json"
-        syft scan ${IMAGE} -o ${SBOM_FORMAT}=${BOM_FILE}
+        syft scan -v ${IMAGE} -o ${SBOM_FORMAT}=${BOM_FILE}
         echo "bom_file=$BOM_FILE" >> "$GITHUB_OUTPUT"
       env:
         IMAGE: ${{ inputs.image_name }}
