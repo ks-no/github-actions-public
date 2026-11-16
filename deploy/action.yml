@@ -53,29 +53,18 @@ runs:
         ks_github_app_id: ${{ inputs.ks_github_app_id }}
         ks_github_app_private_key: ${{ inputs.ks_github_app_private_key }}
 
-    - name: Setup JFrog CLI
-      if: inputs.artifactory_username != '' && inputs.environment == 'prod'
-      uses: ks-no/github-actions-public/setup-jfrog-cli@main
-      with:
-        artifactory_username: ${{ inputs.artifactory_username }}
-        artifactory_password: ${{ inputs.artifactory_password }}
-
-    - name: SBOM Upload and Report
-      if: inputs.dependency_track_api_key != '' && inputs.artifactory_username != '' && inputs.environment == 'prod'
-      uses: ks-no/github-actions-public/sbom-upload-and-report@main
-      continue-on-error: true
-      with:
-        dependency_track_api_key: ${{ inputs.dependency_track_api_key }}
-        project_version: 'prod'
-        artifactory_repository_name: ${{ github.event.repository.name }}
-        artifactory_fetch_version: ${{ inputs.version }}
-
     - name: Configure AWS credentials from GitHub OIDC
+      id: aws
       uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6.0.0
       with:
         role-to-assume: 'arn:aws:iam::461074034890:role/github-to-aws'
         aws-region: 'eu-north-1'
         role-skip-session-tagging: true
+        # Do not export the AWS keys to the job environment: only the SQS step
+        # gets them. This does not stop other steps from using AWS: any step in
+        # a job with id-token: write can request an OIDC token and assume the role.
+        output-env-credentials: false
+        output-credentials: true
 
     - name: Get User Full Name
       id: user_info
@@ -95,6 +84,11 @@ runs:
     - name: Send deployment message to SQS
       shell: bash
       env:
+        AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+        AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+        AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+        AWS_REGION: 'eu-north-1'
+        AWS_DEFAULT_REGION: 'eu-north-1'
         # toJSON() turns each value into a quoted, escaped JSON string, so no
         # value can break out of the message or the shell command.
         VERSION_JSON: ${{ toJSON(inputs.version) }}
@@ -106,3 +100,24 @@ runs:
         aws sts get-caller-identity
         MESSAGE_BODY="{\"version\": ${VERSION_JSON}, \"helm_chart\": ${HELM_CHART_JSON}, \"environment\": ${ENVIRONMENT_JSON}, \"repo\": ${REPO_JSON}, \"user\": ${USER_JSON}}"
         aws sqs send-message --queue-url 'https://sqs.eu-north-1.amazonaws.com/461074034890/deployment-queue' --message-body "$MESSAGE_BODY"
+
+    # SBOM and Dependency-Track run after the deploy message, so a slow DT can no
+    # longer delay or block the deploy itself. The calling job can still time out
+    # afterwards: continue-on-error does not stop a job timeout.
+    - name: Setup JFrog CLI
+      if: inputs.artifactory_username != '' && inputs.environment == 'prod'
+      continue-on-error: true
+      uses: ks-no/github-actions-public/setup-jfrog-cli@main
+      with:
+        artifactory_username: ${{ inputs.artifactory_username }}
+        artifactory_password: ${{ inputs.artifactory_password }}
+
+    - name: SBOM Upload and Report
+      if: inputs.dependency_track_api_key != '' && inputs.artifactory_username != '' && inputs.environment == 'prod'
+      uses: ks-no/github-actions-public/sbom-upload-and-report@main
+      continue-on-error: true
+      with:
+        dependency_track_api_key: ${{ inputs.dependency_track_api_key }}
+        project_version: 'prod'
+        artifactory_repository_name: ${{ github.event.repository.name }}
+        artifactory_fetch_version: ${{ inputs.version }}

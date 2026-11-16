@@ -38,7 +38,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: [self-hosted, x64]
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Valider inputs
         shell: bash
