@@ -89,8 +89,9 @@ runs:
         AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
         AWS_REGION: 'eu-north-1'
         AWS_DEFAULT_REGION: 'eu-north-1'
-        # toJSON() turns each value into a quoted, escaped JSON string, so no
-        # value can break out of the message or the shell command.
+        # The values reach the shell only through env:, so they are never run as
+        # shell code. toJSON() turns each value into a quoted, escaped JSON
+        # string, so no value can break out of the message.
         VERSION_JSON: ${{ toJSON(inputs.version) }}
         HELM_CHART_JSON: ${{ toJSON(inputs.helm_chart) }}
         ENVIRONMENT_JSON: ${{ toJSON(inputs.environment) }}
