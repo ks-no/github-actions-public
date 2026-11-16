@@ -33,13 +33,16 @@ runs:
   steps:
     - name: Write deploy summary
       shell: bash
+      env:
+        DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+        DEPLOY_VERSION: ${{ inputs.version }}
       run: |
         {
           echo "### Deploy"
           echo ""
           echo "| Environment | Version |"
           echo "|---|---|"
-          echo "| \`${{ inputs.environment }}\` | \`${{ inputs.version }}\` |"
+          echo "| \`${DEPLOY_ENVIRONMENT}\` | \`${DEPLOY_VERSION}\` |"
           echo ""
         } >> "$GITHUB_STEP_SUMMARY"
 
@@ -78,16 +81,28 @@ runs:
       id: user_info
       env:
         GH_TOKEN: ${{ steps.app_token.outputs.app_token }}
+        ACTOR: ${{ github.actor }}
       shell: bash
       run: |
-        USER_FULL_NAME=$(gh api "/users/${{ github.actor }}" --jq '.name // ""')
+        USER_FULL_NAME=$(gh api "/users/${ACTOR}" --jq '.name // ""')
+        # Profile names are free text: drop line breaks so they cannot add step outputs.
+        USER_FULL_NAME=$(printf '%s' "$USER_FULL_NAME" | tr -d '\r\n')
         if [ -z "$USER_FULL_NAME" ]; then
-          USER_FULL_NAME="${{ github.actor }}"
+          USER_FULL_NAME="$ACTOR"
         fi
-        echo "user_full_name=$USER_FULL_NAME" >> $GITHUB_OUTPUT
+        echo "user_full_name=$USER_FULL_NAME" >> "$GITHUB_OUTPUT"
 
     - name: Send deployment message to SQS
       shell: bash
+      env:
+        # toJSON() turns each value into a quoted, escaped JSON string, so no
+        # value can break out of the message or the shell command.
+        VERSION_JSON: ${{ toJSON(inputs.version) }}
+        HELM_CHART_JSON: ${{ toJSON(inputs.helm_chart) }}
+        ENVIRONMENT_JSON: ${{ toJSON(inputs.environment) }}
+        REPO_JSON: ${{ toJSON(github.repository) }}
+        USER_JSON: ${{ toJSON(steps.user_info.outputs.user_full_name) }}
       run: |
         aws sts get-caller-identity
-        aws sqs send-message --queue-url 'https://sqs.eu-north-1.amazonaws.com/461074034890/deployment-queue' --message-body "{\"version\": \"${{ inputs.version }}\", \"helm_chart\": \"${{ inputs.helm_chart }}\", \"environment\": \"${{ inputs.environment }}\", \"repo\": \"${{ github.repository }}\", \"user\": \"${{ steps.user_info.outputs.user_full_name }}\"}"
+        MESSAGE_BODY="{\"version\": ${VERSION_JSON}, \"helm_chart\": ${HELM_CHART_JSON}, \"environment\": ${ENVIRONMENT_JSON}, \"repo\": ${REPO_JSON}, \"user\": ${USER_JSON}}"
+        aws sqs send-message --queue-url 'https://sqs.eu-north-1.amazonaws.com/461074034890/deployment-queue' --message-body "$MESSAGE_BODY"
