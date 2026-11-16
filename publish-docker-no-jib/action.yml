@@ -80,17 +80,19 @@ runs:
     - name: Tag and Push Docker image
       shell: bash
       run: |
-        REPO_URL="${{ steps.set_repo.outputs.repo }}"
         IFS=',' read -ra TAGS <<< "${{ inputs.tags }}"
         for tag in "${TAGS[@]}"; do
           # Trim whitespace from tag
           tag=$(echo "$tag" | xargs)
           if [ -n "$tag" ]; then
-            echo "Tagging and pushing ${{ inputs.image_name }} as $REPO_URL/${{ inputs.image_name }}:$tag"
-            docker tag "${{ inputs.image_name }}" "$REPO_URL/${{ inputs.image_name }}:$tag"
-            jfrog docker push "$REPO_URL/${{ inputs.image_name }}:$tag"
+            echo "Tagging and pushing $IMAGE as $REPO_URL/$IMAGE:$tag"
+            docker tag "$IMAGE" "$REPO_URL/$IMAGE:$tag"
+            jfrog docker push "$REPO_URL/$IMAGE:$tag"
           fi
         done
+      env:
+        REPO_URL: ${{ steps.set_repo.outputs.repo }}
+        IMAGE: ${{ inputs.image_name }}
 
     - name: Generate SBOM
       id: sbom

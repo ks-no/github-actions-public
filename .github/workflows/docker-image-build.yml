@@ -114,7 +114,7 @@ jobs:
           image_name: ${{ inputs.project_name }}
           is_release: ${{ inputs.is_release }}
           build_name: ${{ inputs.project_name }}
-          tags: ${{ steps.version.outputs.resolved_version }}
+          tags: ${{ inputs.is_release == true && format('{0},latest', steps.version.outputs.resolved_version) || steps.version.outputs.resolved_version }}
 
       - name: Build and publish Helm chart
         uses: ks-no/github-actions-public/publish-helm@main
