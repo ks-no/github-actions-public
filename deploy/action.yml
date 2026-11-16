@@ -73,7 +73,10 @@ runs:
         ACTOR: ${{ github.actor }}
       shell: bash
       run: |
-        USER_FULL_NAME=$(gh api "/users/${ACTOR}" --jq '.name // ""')
+        # The name is only shown in the deploy message: if the lookup fails, use
+        # the login so the deploy still goes out.
+        USER_FULL_NAME=$(gh api "/users/${ACTOR}" --jq '.name // ""') \
+          || { echo "::warning::Could not look up the profile name; using the login."; USER_FULL_NAME=""; }
         # Profile names are free text: drop line breaks so they cannot add step outputs.
         USER_FULL_NAME=$(printf '%s' "$USER_FULL_NAME" | tr -d '\r\n')
         if [ -z "$USER_FULL_NAME" ]; then
