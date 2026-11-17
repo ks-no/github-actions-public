@@ -25,6 +25,10 @@ inputs:
     description: 'Set to true to install QEMU emulators, only needed when the build runs non-amd64 containers.'
     required: false
     default: 'false'
+  working_directory:
+    description: 'Directory that contains the root pom.xml and component-test/, relative to the repo root (e.g. "backend").'
+    required: false
+    default: '.'
 
 runs:
   using: "composite"
@@ -92,9 +96,12 @@ runs:
         ARTIFACTORY_PASSWORD: ${{ inputs.artifactory_password }}
         DOCKER_DEFAULT_PLATFORM: linux/amd64
         MAVEN_OPTS: "-XX:MaxRAMPercentage=50"
+        WORKING_DIRECTORY: ${{ inputs.working_directory }}
       run: |
         echo "$ARTIFACTORY_PASSWORD" | docker login https://docker-all.artifactory.fiks.ks.no -u "$ARTIFACTORY_USERNAME" --password-stdin
         git submodule update --init --recursive
+        # Submodulene oppdateres fra roten; Maven kjøres der rot-pom-en ligger.
+        cd "$WORKING_DIRECTORY"
         # makeAggregateBom er et aggregator-mål og kjøres der det står i kommandoen. Står det
         # før install, slår det opp søskenmodulenes SNAPSHOT-er i Artifactory før de er bygget.
         jfrog mvn -Dkotlin.environment.keepalive=true -B -T0.5C clean install org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -Dcyclonedx.outputFormat=json --build-name=$BUILD_NAME --build-number=$GITHUB_RUN_NUMBER
@@ -108,6 +115,7 @@ runs:
 
     - name: Build and start component test containers
       shell: bash
+      working-directory: ${{ inputs.working_directory }}
       run: |
         cd component-test
         jfrog docker compose build
@@ -115,6 +123,7 @@ runs:
 
     - name: Run component tests
       shell: bash
+      working-directory: ${{ inputs.working_directory }}
       run: |
         jfrog mvn -f component-test/pom.xml -Dcomponent=true -B -T0.5C verify
 
@@ -123,7 +132,7 @@ runs:
       uses: ks-no/github-actions-public/upload-artifact@main
       with:
         name: component-test-reports
-        path: 'component-test/target/surefire-reports/*.xml'
+        path: ${{ inputs.working_directory != '.' && inputs.working_directory != '' && format('{0}/component-test/target/surefire-reports/*.xml', inputs.working_directory) || 'component-test/target/surefire-reports/*.xml' }}
 
     - name: Publish Test Results
       if: always()
@@ -139,6 +148,7 @@ runs:
     - name: Stop and clean up component test containers
       if: always()
       shell: bash
+      working-directory: ${{ inputs.working_directory }}
       run: |
         cd component-test
         jfrog docker compose down --volumes --remove-orphans
@@ -148,6 +158,7 @@ runs:
     - name: Publish Maven Artifacts
       if: env.PUBLISH_ARTIFACTS != 'false'
       shell: bash
+      working-directory: ${{ inputs.working_directory }}
       run: |
         jfrog mvn -B deploy -DskipTests --build-name=$BUILD_NAME --build-number=$GITHUB_RUN_NUMBER
 
