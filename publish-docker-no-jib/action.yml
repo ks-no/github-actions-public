@@ -78,6 +78,7 @@ runs:
         NPMRC: ${{ inputs.npmrc }}
 
     - name: Tag and Push Docker image
+      id: tag
       shell: bash
       run: |
         REPO_URL="${{ steps.set_repo.outputs.repo }}"
@@ -85,18 +86,22 @@ runs:
         for tag in "${TAGS[@]}"; do
           # Trim whitespace from tag
           tag=$(echo "$tag" | xargs)
+          PUSH_TAG="$REPO_URL/$IMAGE:$tag"
           if [ -n "$tag" ]; then
-            echo "Tagging and pushing ${{ inputs.image_name }} as $REPO_URL/${{ inputs.image_name }}:$tag"
-            docker tag "${{ inputs.image_name }}" "$REPO_URL/${{ inputs.image_name }}:$tag"
-            jfrog docker push "$REPO_URL/${{ inputs.image_name }}:$tag"
+            echo "Tagging and pushing $IMAGE as $PUSH_TAG"
+            docker tag "$IMAGE" "$PUSH_TAG"
+            jfrog docker push "$PUSH_TAG"
           fi
         done
+        echo "tagged_image=$PUSH_TAG" >> $GITHUB_OUTPUT
+      env:
+        IMAGE: ${{ inputs.image_name }}
 
     - name: Generate SBOM
       id: sbom
       uses: ks-no/github-actions-public/syft-sbom@main
       with:
-        image_name: ${{ inputs.image_name }}
+        image_name: ${{ steps.tag.outputs.tagged_image }}
 
     - name: Upload SBOM to Dependency-Track
       uses: ks-no/github-actions-public/sbom-upload-and-report@main
