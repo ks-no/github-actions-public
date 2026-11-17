@@ -278,8 +278,12 @@ jobs:
         if: inputs.is_release == true && github.ref_name == 'main'
         shell: bash
         run: |
-          git commit -a -m "Prepare release ${{ steps.version.outputs.resolved_version }}"
-          git push
+          if git diff --quiet; then
+            echo "package.json already has version ${{ steps.version.outputs.resolved_version }}, skipping commit and push."
+          else
+            git commit -a -m "Prepare release ${{ steps.version.outputs.resolved_version }}"
+            git push
+          fi
           COMMIT_MESSAGE=$(git log -1 --pretty=%B)
           EOF_MARKER=$(uuidgen)
           echo "commit_message<<$EOF_MARKER" >> $GITHUB_OUTPUT
