@@ -168,7 +168,7 @@ jobs:
       - name: 'Prepare and Tag Release'
         if: inputs.is_release == true
         id: prepare_release
-        uses: ks-no/github-actions-public/prepare-and-tag-release@java-service-build-working-directory
+        uses: ks-no/github-actions-public/prepare-and-tag-release@main
         with:
           version: ${{ steps.resolve_version.outputs.resolved_version }}
           java_version: ${{ inputs.java_version }}
@@ -180,7 +180,7 @@ jobs:
 
       - name: 'Build Java Project'
         id: build_java
-        uses: ks-no/github-actions-public/build-java-and-test@java-service-build-working-directory
+        uses: ks-no/github-actions-public/build-java-and-test@main
         with:
           java_version: ${{ inputs.java_version }}
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
@@ -233,7 +233,7 @@ jobs:
 
       - name: 'Publish, Release and Create Next Snapshot'
         if: inputs.is_release == true
-        uses: ks-no/github-actions-public/publish-release-create-snapshot@java-service-build-working-directory
+        uses: ks-no/github-actions-public/publish-release-create-snapshot@main
         with:
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
