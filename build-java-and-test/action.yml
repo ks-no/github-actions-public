@@ -101,7 +101,8 @@ runs:
         echo "$ARTIFACTORY_PASSWORD" | docker login https://docker-all.artifactory.fiks.ks.no -u "$ARTIFACTORY_USERNAME" --password-stdin
         git submodule update --init --recursive
         # Submodulene oppdateres fra roten; Maven kjøres der rot-pom-en ligger.
-        cd "$WORKING_DIRECTORY"
+        # Tom verdi behandles som '.', slik som i sti-uttrykkene lenger ned.
+        cd "${WORKING_DIRECTORY:-.}"
         # makeAggregateBom er et aggregator-mål og kjøres der det står i kommandoen. Står det
         # før install, slår det opp søskenmodulenes SNAPSHOT-er i Artifactory før de er bygget.
         jfrog mvn -Dkotlin.environment.keepalive=true -B -T0.5C clean install org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeAggregateBom -Dcyclonedx.outputFormat=json --build-name=$BUILD_NAME --build-number=$GITHUB_RUN_NUMBER
