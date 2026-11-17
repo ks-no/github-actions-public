@@ -40,6 +40,11 @@ runs:
     - name: Calculate version information
       id: version
       shell: bash
+      env:
+        SPECIFIED_VERSION: ${{ inputs.specified-version }}
+        IS_RELEASE: ${{ inputs.is-release }}
+        BRANCH_NAME: ${{ inputs.branch-name }}
+        RUN_NUMBER: ${{ inputs.run-number }}
       run: |
         find_version() {
           for file in $(find . -name "*.csproj" -not -path "*/Test*" -not -path "*/Example*"); do
@@ -52,8 +57,17 @@ runs:
           echo ""
         }
         
-        CURRENT_VERSION="${{ inputs.specified-version }}"
-        if [ -z "$CURRENT_VERSION" ]; then
+        # A specified version overrides VersionPrefix in csproj and ends up in BUILD_OPTS,
+        # so it must be a plain X.Y.Z before it is passed on to dotnet build.
+        VERSION_OPTS=""
+        if [ -n "$SPECIFIED_VERSION" ]; then
+          if [[ ! "$SPECIFIED_VERSION" =~ ^([0-9]|[1-9][0-9]+)\.([0-9]|[1-9][0-9]+)\.([0-9]|[1-9][0-9]+)$ ]]; then
+            echo "::error::'specified-version' must be in the format X.Y.Z where X, Y, and Z are non-negative integers."
+            exit 1
+          fi
+          CURRENT_VERSION="$SPECIFIED_VERSION"
+          VERSION_OPTS="-p:VersionPrefix=${SPECIFIED_VERSION}"
+        else
           CURRENT_VERSION=$(find_version)
         fi
         
@@ -72,22 +86,20 @@ runs:
         echo "Next version: $NEXT_VERSION"
         
         # Determine if this is a release
-        IS_RELEASE="${{ inputs.is-release }}"
         if [ "$IS_RELEASE" != "true" ]; then
           IS_RELEASE="false"
         fi
         
         # Calculate version suffix for pre-release builds
         if [ "$IS_RELEASE" = "false" ]; then
-          BRANCH_NAME="${{ inputs.branch-name }}"
           NORMALIZED_BRANCH=$(echo "$BRANCH_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]//g' | cut -c1-15)
-          VERSION_SUFFIX="alpha.${NORMALIZED_BRANCH}.${{ inputs.run-number }}"
+          VERSION_SUFFIX="alpha.${NORMALIZED_BRANCH}.${RUN_NUMBER}"
           FULL_VERSION="${CURRENT_VERSION}-${VERSION_SUFFIX}"
-          BUILD_OPTS="--version-suffix ${VERSION_SUFFIX}"
+          BUILD_OPTS="${VERSION_OPTS:+$VERSION_OPTS }--version-suffix ${VERSION_SUFFIX}"
         else
           VERSION_SUFFIX=""
           FULL_VERSION="${CURRENT_VERSION}"
-          BUILD_OPTS=""
+          BUILD_OPTS="${VERSION_OPTS}"
         fi
         
         echo "version-suffix=$VERSION_SUFFIX" >> $GITHUB_OUTPUT
