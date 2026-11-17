@@ -5,6 +5,9 @@ inputs:
   is_release:
     description: 'true for release, false for snapshot'
     required: true
+  publish_sbom:
+    description: 'Whether to generate SBOM and publish to Dependency-Track, true or false'
+    required: true
   image_name:
     description: 'Name of the Docker image'
     required: true
@@ -99,11 +102,13 @@ runs:
 
     - name: Generate SBOM
       id: sbom
+      if: inputs.publish_sbom == 'true'
       uses: ks-no/github-actions-public/syft-sbom@main
       with:
         image_name: ${{ steps.tag.outputs.tagged_image }}
 
     - name: Upload SBOM to Dependency-Track
+      if: inputs.publish_sbom == 'true'
       uses: ks-no/github-actions-public/sbom-upload-and-report@main
       with:
         dependency_track_api_key: ${{ inputs.dt_api_key }}
