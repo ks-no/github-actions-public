@@ -92,7 +92,7 @@ runs:
 
     - name: Restore Maven cache
       id: maven_cache
-      uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 #v5.0.4
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 #v6.1.0
       with:
         path: ~/.m2/repository
         key: ${{ steps.cache_key.outputs.key }}
@@ -223,7 +223,7 @@ runs:
 
     - name: Create GitHub Release
       if: inputs.is_release == 'true' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-      uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe #v2.6.1
+      uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 #v3.0.4
       env:
         GITHUB_TOKEN: ${{ steps.app_token.outputs.app_token }}
       with:
@@ -246,7 +246,7 @@ runs:
     # repoets 10 GB-kvote og presser ut main-cachen som alle faktisk restorer fra.
     - name: Save Maven cache
       if: steps.maven_cache.outputs.cache-hit != 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-      uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 #v5.0.4
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 #v6.1.0
       with:
         path: ~/.m2/repository
         key: ${{ steps.cache_key.outputs.key }}
