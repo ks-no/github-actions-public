@@ -36,6 +36,11 @@ on:
         description: 'true for release, false for snapshot'
         required: true
         type: boolean
+      default_branch:
+        description: "The ref name of the repo's default branch"
+        type: string
+        required: false
+        default: 'main'
       version:
         description: 'Version number to release. Mutually exclusive with semver_increment.'
         required: false
@@ -113,6 +118,7 @@ jobs:
           dockerfile: ${{ inputs.dockerfile }}
           image_name: ${{ inputs.project_name }}
           is_release: ${{ inputs.is_release }}
+          publish_sbom: ${{ github.ref_name == inputs.default_branch }}
           build_name: ${{ inputs.project_name }}
           tags: ${{ steps.version.outputs.resolved_version }}
 
