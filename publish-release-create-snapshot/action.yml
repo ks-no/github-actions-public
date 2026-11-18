@@ -16,6 +16,10 @@ inputs:
   release_body:
     description: 'The body of release text for actual release'
     required: true
+  working_directory:
+    description: 'Directory that contains the root pom.xml, relative to the repo root (e.g. "backend").'
+    required: false
+    default: '.'
 
 runs:
   using: 'composite'
@@ -23,6 +27,7 @@ runs:
 
     - name: Set next snapshot version
       shell: bash
+      working-directory: ${{ inputs.working_directory }}
       run: |
         IFS='.' read -r major minor patch <<< "${{ inputs.version }}"
         next_patch=$((patch + 1))

@@ -21,6 +21,10 @@ inputs:
     description: 'Reviewer for the release PR'
     required: false
     default: ''
+  working_directory:
+    description: 'Directory that contains the root pom.xml, relative to the repo root (e.g. "backend").'
+    required: false
+    default: '.'
 
 outputs:
   release_body:
@@ -51,6 +55,7 @@ runs:
 
     - name: Set release version
       shell: bash
+      working-directory: ${{ inputs.working_directory }}
       run: jfrog mvn versions:set -DnewVersion=${{ inputs.version }} -DgenerateBackupPoms=false
 
     - name: Commit release version
