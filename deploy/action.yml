@@ -33,13 +33,16 @@ runs:
   steps:
     - name: Write deploy summary
       shell: bash
+      env:
+        DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+        DEPLOY_VERSION: ${{ inputs.version }}
       run: |
         {
           echo "### Deploy"
           echo ""
           echo "| Environment | Version |"
           echo "|---|---|"
-          echo "| \`${{ inputs.environment }}\` | \`${{ inputs.version }}\` |"
+          echo "| \`${DEPLOY_ENVIRONMENT}\` | \`${DEPLOY_VERSION}\` |"
           echo ""
         } >> "$GITHUB_STEP_SUMMARY"
 
@@ -50,8 +53,64 @@ runs:
         ks_github_app_id: ${{ inputs.ks_github_app_id }}
         ks_github_app_private_key: ${{ inputs.ks_github_app_private_key }}
 
+    - name: Configure AWS credentials from GitHub OIDC
+      id: aws
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6.0.0
+      with:
+        role-to-assume: 'arn:aws:iam::461074034890:role/github-to-aws'
+        aws-region: 'eu-north-1'
+        role-skip-session-tagging: true
+        # Do not export the AWS keys to the job environment: only the SQS step
+        # gets them. This does not stop other steps from using AWS: any step in
+        # a job with id-token: write can request an OIDC token and assume the role.
+        output-env-credentials: false
+        output-credentials: true
+
+    - name: Get User Full Name
+      id: user_info
+      env:
+        GH_TOKEN: ${{ steps.app_token.outputs.app_token }}
+        ACTOR: ${{ github.actor }}
+      shell: bash
+      run: |
+        # The name is only shown in the deploy message: if the lookup fails, use
+        # the login so the deploy still goes out.
+        USER_FULL_NAME=$(gh api "/users/${ACTOR}" --jq '.name // ""') \
+          || { echo "::warning::Could not look up the profile name; using the login."; USER_FULL_NAME=""; }
+        # Profile names are free text: drop line breaks so they cannot add step outputs.
+        USER_FULL_NAME=$(printf '%s' "$USER_FULL_NAME" | tr -d '\r\n')
+        if [ -z "$USER_FULL_NAME" ]; then
+          USER_FULL_NAME="$ACTOR"
+        fi
+        echo "user_full_name=$USER_FULL_NAME" >> "$GITHUB_OUTPUT"
+
+    - name: Send deployment message to SQS
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+        AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+        AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+        AWS_REGION: 'eu-north-1'
+        AWS_DEFAULT_REGION: 'eu-north-1'
+        # The values reach the shell only through env:, so they are never run as
+        # shell code. toJSON() turns each value into a quoted, escaped JSON
+        # string, so no value can break out of the message.
+        VERSION_JSON: ${{ toJSON(inputs.version) }}
+        HELM_CHART_JSON: ${{ toJSON(inputs.helm_chart) }}
+        ENVIRONMENT_JSON: ${{ toJSON(inputs.environment) }}
+        REPO_JSON: ${{ toJSON(github.repository) }}
+        USER_JSON: ${{ toJSON(steps.user_info.outputs.user_full_name) }}
+      run: |
+        aws sts get-caller-identity
+        MESSAGE_BODY="{\"version\": ${VERSION_JSON}, \"helm_chart\": ${HELM_CHART_JSON}, \"environment\": ${ENVIRONMENT_JSON}, \"repo\": ${REPO_JSON}, \"user\": ${USER_JSON}}"
+        aws sqs send-message --queue-url 'https://sqs.eu-north-1.amazonaws.com/461074034890/deployment-queue' --message-body "$MESSAGE_BODY"
+
+    # SBOM and Dependency-Track run after the deploy message, so a slow DT can no
+    # longer delay or block the deploy itself. The calling job can still time out
+    # afterwards: continue-on-error does not stop a job timeout.
     - name: Setup JFrog CLI
       if: inputs.artifactory_username != '' && inputs.environment == 'prod'
+      continue-on-error: true
       uses: ks-no/github-actions-public/setup-jfrog-cli@main
       with:
         artifactory_username: ${{ inputs.artifactory_username }}
@@ -66,28 +125,3 @@ runs:
         project_version: 'prod'
         artifactory_repository_name: ${{ github.event.repository.name }}
         artifactory_fetch_version: ${{ inputs.version }}
-
-    - name: Configure AWS credentials from GitHub OIDC
-      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 #v6.0.0
-      with:
-        role-to-assume: 'arn:aws:iam::461074034890:role/github-to-aws'
-        aws-region: 'eu-north-1'
-        role-skip-session-tagging: true
-
-    - name: Get User Full Name
-      id: user_info
-      env:
-        GH_TOKEN: ${{ steps.app_token.outputs.app_token }}
-      shell: bash
-      run: |
-        USER_FULL_NAME=$(gh api "/users/${{ github.actor }}" --jq '.name // ""')
-        if [ -z "$USER_FULL_NAME" ]; then
-          USER_FULL_NAME="${{ github.actor }}"
-        fi
-        echo "user_full_name=$USER_FULL_NAME" >> $GITHUB_OUTPUT
-
-    - name: Send deployment message to SQS
-      shell: bash
-      run: |
-        aws sts get-caller-identity
-        aws sqs send-message --queue-url 'https://sqs.eu-north-1.amazonaws.com/461074034890/deployment-queue' --message-body "{\"version\": \"${{ inputs.version }}\", \"helm_chart\": \"${{ inputs.helm_chart }}\", \"environment\": \"${{ inputs.environment }}\", \"repo\": \"${{ github.repository }}\", \"user\": \"${{ steps.user_info.outputs.user_full_name }}\"}"
