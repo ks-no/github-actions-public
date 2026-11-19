@@ -23,6 +23,11 @@ on:
         required: false
         default: './Dockerfile'
         type: string
+      docker_cwd:
+        description: 'Working directory for building Dockerfile'
+        required: false
+        default: './'
+        type: string
       autodeploy:
         description: 'Whether to deploy on successful build'
         required: true
@@ -116,6 +121,7 @@ jobs:
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           dt_api_key: ${{ secrets.DEPENDENCY_TRACK_API_KEY }}
           dockerfile: ${{ inputs.dockerfile }}
+          docker_cwd: ${{ inputs.docker_cwd }}
           image_name: ${{ inputs.project_name }}
           is_release: ${{ inputs.is_release }}
           publish_sbom: ${{ github.ref_name == inputs.default_branch }}

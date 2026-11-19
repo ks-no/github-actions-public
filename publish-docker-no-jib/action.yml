@@ -15,6 +15,10 @@ inputs:
     description: 'Dockerfile to use'
     required: true
     default: 'Dockerfile'
+  docker_cwd:
+    description: 'Working directory for building Dockerfile'
+    required: false
+    default: './'
   build_name:
     description: 'JFrog build name'
     required: true
@@ -77,6 +81,7 @@ runs:
           --secret id=npmrc,env=NPMRC \
           --no-cache \
           .
+      working-directory: ${{ inputs.docker_cwd }}
       env:
         NPMRC: ${{ inputs.npmrc }}
 
