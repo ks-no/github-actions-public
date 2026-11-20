@@ -33,7 +33,7 @@ on:
         type: string
         default: 'dev'
       path:
-        description: 'Path to the Dockerfile'
+        description: 'Path to the Dockerfile, relative to working_directory'
         required: false
         type: string
         default: '.'
@@ -85,6 +85,14 @@ on:
         required: false
         type: boolean
         default: false
+      working_directory:
+        description: >
+          Directory that contains the root pom.xml, relative to the repo root (e.g. "backend").
+          Applies to the Maven build, component tests, release versioning, Jib and the BOM file.
+          helm_folder and specs are still relative to the repo root.
+        required: false
+        type: string
+        default: '.'
 
 permissions:
   id-token: write
@@ -168,6 +176,7 @@ jobs:
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
           reviewer: ${{ inputs.reviewer }}
+          working_directory: ${{ inputs.working_directory }}
 
       - name: 'Build Java Project'
         id: build_java
@@ -180,6 +189,7 @@ jobs:
           is_release: ${{ inputs.is_release }}
           version: ${{ steps.resolve_version.outputs.resolved_version }}
           setup_qemu: ${{ inputs.setup_qemu }}
+          working_directory: ${{ inputs.working_directory }}
 
       - name: 'Build and Push Helm'
         if: inputs.helm_chart != '' && env.PUBLISH_ARTIFACTS == 'true'
@@ -204,7 +214,8 @@ jobs:
           tags: ${{ steps.resolve_version.outputs.resolved_version }}
           artifactory_username: ${{ secrets.ARTIFACTORY_USERNAME }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
-          path: ${{ inputs.path }}
+          # path er relativ til working_directory. Med default '.' sendes path uendret.
+          path: ${{ inputs.working_directory != '.' && inputs.working_directory != '' && format('{0}/{1}', inputs.working_directory, inputs.path) || inputs.path }}
           java_version: ${{ inputs.java_version }}
 
       - name: 'Deploy Application'
@@ -229,6 +240,7 @@ jobs:
           version: ${{ steps.resolve_version.outputs.resolved_version }}
           ks_github_app_token: ${{ steps.app_token.outputs.app_token }}
           release_body: ${{ steps.prepare_release.outputs.release_body }}
+          working_directory: ${{ inputs.working_directory }}
 
       - name: 'Publish OpenAPI specs'
         if: inputs.specs != '' && github.ref_name == inputs.default_branch || github.ref == 'refs/heads/master' # TODO: Legg til input for repos som brukar "master"
@@ -255,3 +267,6 @@ jobs:
           project_version: ${{ inputs.is_release == true && 'release' || '' }}
           artifactory_repository_name: ${{ github.event.repository.name }}
           artifactory_artifact_version: ${{ steps.resolve_version.outputs.resolved_version }}
+          # makeAggregateBom skriver target/bom.json ved siden av rot-pom-en. Med default '.'
+          # er bom_file tom, og actionen finner BOM-filen selv som før.
+          bom_file: ${{ inputs.working_directory != '.' && inputs.working_directory != '' && format('{0}/target/bom.json', inputs.working_directory) || '' }}

@@ -49,3 +49,5 @@ jobs:
       # reviewer: 'team-platform'
       # Optional (copy-edit): uncomment if the build runs non-amd64 containers and needs QEMU emulation.
       # setup_qemu: true
+      # Optional (copy-edit): uncomment if the root pom.xml is not in the repo root (helm_folder stays relative to the repo root).
+      # working_directory: 'backend'
