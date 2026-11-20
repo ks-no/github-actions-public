@@ -163,6 +163,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.app_token.outputs.app_token }}
         with:
-          tag_name: ${{ inputs.version }}
-          name: "Release ${{ inputs.version }}"
+          tag_name: ${{ steps.version.outputs.resolved_version }}
+          name: "Release ${{ steps.version.outputs.resolved_version }}"
           body: ${{ steps.release_notes.outputs.release_body }}
