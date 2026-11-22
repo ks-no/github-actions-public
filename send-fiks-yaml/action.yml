@@ -1,0 +1,49 @@
+name: 'Send fiks.yaml'
+description: |
+  Sends .nais/fiks.yaml to nais-provisioner (mode submit), or asks for the plan without changing anything (mode plan),
+  with an OIDC token from GitHub Actions. The step fails when nais-provisioner rejects fiks.yaml.
+  The job needs `permissions: id-token: write`. Uses curl and jq, which are installed on the GitHub runners.
+inputs:
+  url:
+    description: 'Address of nais-provisioner, for example https://nais-provisioner.external.dev.ks-digital.cloud.nais.io'
+    required: true
+  team:
+    description: 'Team in Nais'
+    required: true
+  app:
+    description: 'Application name, equal to metadata.name in fiks.yaml and nais.yaml'
+    required: true
+  environment:
+    description: 'Environment in Nais, for example dev'
+    required: true
+  file:
+    description: 'Path to fiks.yaml'
+    required: false
+    default: '.nais/fiks.yaml'
+  mode:
+    description: 'submit sends fiks.yaml and changes the state. plan validates and shows the plan without changing anything, for pull request builds.'
+    required: false
+    default: 'submit'
+  nais_file:
+    description: 'Path to nais.yaml. nais-provisioner rejects fiks.yaml when spec.envFrom lacks a secret it creates for the app. Required in mode submit; an empty value is only allowed in mode plan.'
+    required: false
+    default: '.nais/app.yaml'
+  audience:
+    description: 'Audience of the OIDC token'
+    required: false
+    default: 'nais-provisioner'
+runs:
+  using: 'composite'
+  steps:
+    - name: Send fiks.yaml
+      shell: bash
+      env:
+        FIKS_URL: ${{ inputs.url }}
+        FIKS_TEAM: ${{ inputs.team }}
+        FIKS_APP: ${{ inputs.app }}
+        FIKS_ENVIRONMENT: ${{ inputs.environment }}
+        FIKS_FILE: ${{ inputs.file }}
+        FIKS_AUDIENCE: ${{ inputs.audience }}
+        FIKS_NAIS_FILE: ${{ inputs.nais_file }}
+        FIKS_MODE: ${{ inputs.mode }}
+      run: "${{ github.action_path }}/send-fiks-yaml.sh"
