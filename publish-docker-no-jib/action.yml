@@ -15,6 +15,10 @@ inputs:
     description: 'Dockerfile to use'
     required: true
     default: 'Dockerfile'
+  docker_cwd:
+    description: 'Working directory for building Dockerfile'
+    required: false
+    default: './'
   build_name:
     description: 'JFrog build name'
     required: true
@@ -50,16 +54,6 @@ runs:
         artifactory_username: ${{ inputs.artifactory_username }}
         artifactory_password: ${{ inputs.artifactory_password }}
 
-    - name: Set Docker repository
-      id: set_repo
-      shell: bash
-      run: |
-        if [[ "${{ inputs.is_release }}" == "true" ]]; then
-          echo "repo=docker-local.artifactory.fiks.ks.no" >> $GITHUB_OUTPUT
-        else
-          echo "repo=docker-local-snapshots.artifactory.fiks.ks.no" >> $GITHUB_OUTPUT
-        fi
-
     - name: Log in to Artifactory (for base image pull)
       uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 #v4.8.0
       with:
@@ -77,6 +71,7 @@ runs:
           --secret id=npmrc,env=NPMRC \
           --no-cache \
           .
+      working-directory: ${{ inputs.docker_cwd }}
       env:
         NPMRC: ${{ inputs.npmrc }}
 
@@ -84,7 +79,6 @@ runs:
       id: tag
       shell: bash
       run: |
-        REPO_URL="${{ steps.set_repo.outputs.repo }}"
         IFS=',' read -ra TAGS <<< "${{ inputs.tags }}"
         for tag in "${TAGS[@]}"; do
           # Trim whitespace from tag
@@ -99,6 +93,7 @@ runs:
         echo "tagged_image=$PUSH_TAG" >> $GITHUB_OUTPUT
       env:
         IMAGE: ${{ inputs.image_name }}
+        REPO_URL: ${{ inputs.is_release == 'true' && 'docker-local.artifactory.fiks.ks.no' || 'docker-local-snapshots.artifactory.fiks.ks.no' }}
 
     - name: Generate SBOM
       id: sbom
