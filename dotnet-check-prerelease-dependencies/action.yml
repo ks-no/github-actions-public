@@ -39,8 +39,9 @@ runs:
         fi
         echo "Inspecting dependencies of: $target"
 
-        # Note: --format json requires .NET 9 SDK; repos build on 8.0.x, so we parse the
-        # text output. Each dependency line starts with '>': the package id is field 2 and
+        # Note: we parse the text output instead of --format json (which requires .NET 9+ SDK),
+        # so the step works whichever SDK the repo builds with. Each dependency line starts
+        # with '>': the package id is field 2 and
         # the RESOLVED version is the last field. We test only the version column for a
         # SemVer prerelease ('-'), since package ids themselves may contain '-'
         # (e.g. KS.Fiks.ASiC-E).
