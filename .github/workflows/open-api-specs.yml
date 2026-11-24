@@ -124,6 +124,11 @@ jobs:
 
           echo "files=${spec_files[*]}" >> "$GITHUB_OUTPUT"
 
+      - name: Install Redocly CLI
+        if: inputs.is_public
+        shell: bash
+        run: npm install -g @redocly/cli@2.82.0
+
       - name: Lint specs
         shell: bash
         run: |
