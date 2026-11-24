@@ -60,6 +60,34 @@ These wrappers are:
 
 More may be added in the future.
 
+### Nais (`send-fiks-yaml`)
+
+For services on the Nais platform.
+
+`send-fiks-yaml` sends `.nais/fiks.yaml` to [nais-provisioner](https://github.com/ks-no/nais-provisioner), which
+provisions MongoDB, Kurrent, RabbitMQ and Maskinporten for the team. Use `mode: plan` in pull request builds and
+`mode: submit` (the default) before deploy. The job needs `permissions: id-token: write`, and for submit it must run in
+the GitHub environment named after the Nais environment (`environment: dev`), because nais-provisioner checks the
+`environment` claim in the OIDC token.
+
+```yaml
+deploy:
+  runs-on: ubuntu-latest
+  environment: dev
+  permissions:
+    contents: read
+    id-token: write
+  steps:
+    - uses: ks-no/github-actions-public/checkout@main
+    - name: Send fiks.yaml
+      uses: ks-no/github-actions-public/send-fiks-yaml@main
+      with:
+        url: https://nais-provisioner.external.dev.ks-digital.cloud.nais.io
+        team: brevdue
+        app: brevdue-api
+        environment: dev
+```
+
 ### Publish policy (`resolve-publish-policy`)
 
 Snapshot repositories in Artifactory only keep the last few versions of each artifact. When a service
