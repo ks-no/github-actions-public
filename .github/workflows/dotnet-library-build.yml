@@ -32,7 +32,7 @@ on:
         description: '.NET SDK version'
         type: string
         required: false
-        default: '8.0.x'
+        default: '10.0.x'
       run-windows-build:
         description: 'Run Windows parallel build?'
         type: boolean
